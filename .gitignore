@@ -1,0 +1,20 @@
+# Flutter
+/build/
+.dart_tool/
+.pub/
+flutter_export_environment.sh
+
+# Android
+/android/gradlew
+/android/gradle
+/android/local.properties
+/android/Oracle_JDK-21/
+
+# iOS
+/ios/Flutter/.last_build_id
+
+# General
+*.log
+*.zip
+*.tar
+.DS_Store
