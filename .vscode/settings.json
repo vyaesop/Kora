@@ -1,0 +1,6 @@
+{
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.compile.nullAnalysis.mode": "automatic",
+  "dart.flutterSdkPath": ".fvm/versions/3.13.1",
+  "git.ignoreLimitWarning": true
+}
