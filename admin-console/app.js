@@ -19,7 +19,8 @@ const targetAdminInput = document.getElementById('targetAdmin');
 const targetSuperAdminInput = document.getElementById('targetSuperAdmin');
 const setClaimBtn = document.getElementById('setClaimBtn');
 
-apiBaseInput.value = localStorage.getItem(apiBaseStorageKey) || '';
+const defaultApiBase = 'http://localhost:3000';
+apiBaseInput.value = localStorage.getItem(apiBaseStorageKey) || defaultApiBase;
 
 let authToken = localStorage.getItem(tokenStorageKey) || '';
 let authUser = null;

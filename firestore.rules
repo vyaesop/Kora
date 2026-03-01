@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.id == userId
+        && request.resource.data.termsAccepted == true
+        && request.resource.data.privacyAccepted == true
+        && request.resource.data.verificationStatus == 'pending';
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+
+      match /ratings/{ratingId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+        allow update: if request.auth != null
+          && request.auth.uid == userId
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'driverResponse',
+            'driverRespondedAt'
+          ])
+          && request.resource.data.driverResponse is string
+          && request.resource.data.driverResponse.size() > 0
+          && request.resource.data.driverResponse.size() <= 2000;
+        allow delete: if false;
+      }
+    }
+
+    match /threads/{threadId} {
+      allow read: if request.auth != null;
+
+      // Only authenticated users can create threads and the creatorId must match
+      allow create: if request.auth != null
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.postedBy == request.auth.uid
+        && request.resource.data.deliveryStatus == 'pending_bids';
+
+      // Helper: caller is thread owner
+      function isOwner() {
+        return request.auth != null && resource.data.creatorId == request.auth.uid;
+      }
+
+      function isAcceptedDriver() {
+        return request.auth != null && (
+          (resource.data.acceptedCarrierId != null && resource.data.acceptedCarrierId == request.auth.uid)
+          || (resource.data.acceptedUser != null && resource.data.acceptedUser == request.auth.uid)
+          || (resource.data.acceptedCarrierIds is list && request.auth.uid in resource.data.acceptedCarrierIds)
+        );
+      }
+
+      function isForwardStatusTransition() {
+        return (
+          (resource.data.deliveryStatus == 'accepted' && request.resource.data.deliveryStatus == 'driving_to_location')
+          || (resource.data.deliveryStatus == 'driving_to_location' && request.resource.data.deliveryStatus == 'picked_up')
+          || (resource.data.deliveryStatus == 'picked_up' && request.resource.data.deliveryStatus == 'on_the_road')
+          || (resource.data.deliveryStatus == 'on_the_road' && request.resource.data.deliveryStatus == 'delivered')
+        );
+      }
+
+      function isDriverStatusUpdateOnly() {
+        return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'deliveryStatus',
+          'lastStatusUpdatedAt',
+          'lastStatusUpdatedBy',
+          'statusTimeline'
+        ]);
+      }
+
+      function ownerPreservesImmutableThreadIdentity() {
+        return request.resource.data.creatorId == resource.data.creatorId
+          && request.resource.data.postedBy == resource.data.postedBy;
+      }
+
+      // Allow updates
+      // - Thread owner can update thread fields (including accepting bids).
+      // - Accepted drivers may only perform forward delivery status transitions.
+      // - Other non-owners may only atomically bump or decrement `bids_count`.
+      allow update: if request.auth != null && (
+        (isOwner() && ownerPreservesImmutableThreadIdentity())
+        || (
+          isAcceptedDriver()
+          && isDriverStatusUpdateOnly()
+          && request.resource.data.lastStatusUpdatedBy == request.auth.uid
+          && isForwardStatusTransition()
+        )
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['bids_count'])
+          && request.resource.data.bids_count is int
+          && request.resource.data.bids_count >= 0
+          && (request.resource.data.bids_count == resource.data.bids_count + 1 || request.resource.data.bids_count == resource.data.bids_count - 1)
+        )
+      );
+
+      // Only owner may delete a thread
+      allow delete: if request.auth != null && resource.data.creatorId == request.auth.uid;
+
+      match /bids/{bidId} {
+        allow read: if request.auth != null;
+        // Bidder may create their bid; bidderId must match authenticated user
+        allow create: if request.auth != null
+          && request.resource.data.bidderId == request.auth.uid
+          && request.resource.data.bidAmount is number
+          && request.resource.data.bidAmount > 0
+          && request.resource.data.status == 'pending';
+
+        function bidderUpdateIsSafe() {
+          return resource.data.bidderId == request.auth.uid
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'bidAmount',
+              'currency',
+              'carrierNotes',
+              'updatedAt',
+              'riskFlags',
+              'riskScore',
+              'riskEvaluatedAt'
+            ])
+            && request.resource.data.bidAmount is number
+            && request.resource.data.bidAmount > 0
+            && request.resource.data.status == resource.data.status;
+        }
+
+        function ownerUpdateIsSafe() {
+          return get(/databases/$(database)/documents/threads/$(threadId)).data.creatorId == request.auth.uid
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'status',
+              'deliveryStatus',
+              'lastStatusUpdatedAt'
+            ])
+            && request.resource.data.status in ['pending', 'accepted', 'rejected'];
+        }
+
+        // Allow updates to bids by either the bidder (update own bid) or the thread owner (accept/reject)
+        allow update: if request.auth != null && (bidderUpdateIsSafe() || ownerUpdateIsSafe());
+
+        // Prevent arbitrary deletes of bids from clients (use server-side admin or dedicated flows)
+        allow delete: if false;
+      }
+
+      match /chat/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+          && (
+            isOwner()
+            || isAcceptedDriver()
+            || request.resource.data.receiverId == resource.data.creatorId
+          );
+        allow update, delete: if false;
+      }
+
+      match /disputes/{disputeId} {
+        allow read: if request.auth != null && (isOwner() || isAcceptedDriver());
+        allow create: if request.auth != null
+          && request.resource.data.reporterId == request.auth.uid
+          && request.resource.data.details is string
+          && request.resource.data.details.size() > 0
+          && (
+            isOwner()
+            || isAcceptedDriver()
+          );
+        allow update, delete: if false;
+      }
+    }
+
+    match /telemetry/{telemetryDoc}/events/{eventId} {
+      allow create: if request.auth != null
+        && request.resource.data.feature is string
+        && request.resource.data.createdAt != null;
+      allow read, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

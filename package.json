@@ -1,0 +1,12 @@
+{
+  "name": "thread-clone-flutter-workspace",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:admin-ui": "python -m http.server 4173 --directory admin-console",
+    "dev:admin": "concurrently -n backend,admin-ui -c cyan,magenta \"npm run dev:backend\" \"npm run dev:admin-ui\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
