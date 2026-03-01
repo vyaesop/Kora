@@ -3,18 +3,33 @@
 .dart_tool/
 .pub/
 flutter_export_environment.sh
+.flutter-plugins
+.flutter-plugins-dependencies
+.fvm/version
+
+# Node / JS
+node_modules/
+**/node_modules/
+backend/dist/
 
 # Android
 /android/gradlew
 /android/gradle
 /android/local.properties
 /android/Oracle_JDK-21/
+/android/.gradle/
+/android/app/.gradle/
 
 # iOS
 /ios/Flutter/.last_build_id
+/ios/Flutter/Generated.xcconfig
+/ios/Runner/GeneratedPluginRegistrant.h
+/ios/Runner/GeneratedPluginRegistrant.m
 
 # General
 *.log
 *.zip
 *.tar
 .DS_Store
+.idea/
+.metadata

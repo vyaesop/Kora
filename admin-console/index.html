@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kora Admin Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>Kora Admin Console</h1>
+        <p>Verification + disputes control panel</p>
+      </header>
+
+      <section class="card" id="authCard">
+        <h2>Admin Sign In</h2>
+        <div class="row">
+          <input id="email" type="email" placeholder="admin@email.com" />
+          <input id="password" type="password" placeholder="password" />
+          <button id="loginBtn">Sign In</button>
+          <button id="logoutBtn" class="secondary" disabled>Sign Out</button>
+        </div>
+        <small id="authStatus">Not signed in</small>
+      </section>
+
+      <section class="card" id="configCard">
+        <h2>API Config</h2>
+        <div class="row">
+          <input id="apiBase" placeholder="https://your-backend-domain.com" />
+          <button id="saveApiBtn" class="secondary">Save API Base</button>
+        </div>
+        <small>Set your backend base URL once (example: <code>http://localhost:3000</code>). Stored locally in browser.</small>
+      </section>
+
+      <section class="card" id="claimCard">
+        <h2>Admin Claim Management</h2>
+        <div class="row">
+          <input id="targetUid" placeholder="Target user UID" />
+          <label><input type="checkbox" id="targetAdmin" /> admin</label>
+          <label><input type="checkbox" id="targetSuperAdmin" /> superAdmin</label>
+          <button id="setClaimBtn">Apply Claim</button>
+        </div>
+        <small>Setting <code>superAdmin</code> requires your account to already be super admin.</small>
+      </section>
+
+      <section class="card" id="usersCard">
+        <h2>Pending Verification</h2>
+        <div class="row">
+          <button id="refreshUsersBtn" class="secondary">Refresh</button>
+        </div>
+        <div id="usersList" class="list"></div>
+      </section>
+
+      <section class="card" id="disputesCard">
+        <h2>Open Disputes</h2>
+        <div class="row">
+          <button id="refreshDisputesBtn" class="secondary">Refresh</button>
+        </div>
+        <div id="disputesList" class="list"></div>
+      </section>
+
+      <pre id="logBox" class="log"></pre>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
