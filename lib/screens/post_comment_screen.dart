@@ -5,6 +5,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 import '../utils/backend_http.dart';
 import '../utils/firestore_service.dart';
+import '../app_localizations.dart';
 
 class PostCommentScreen extends StatefulWidget {
   const PostCommentScreen({
@@ -29,6 +30,7 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
   String? _existingBidId;
 
   static const double _platformFeeRate = 0.05;
+  static const String _defaultCurrency = 'Birr';
 
   double get _enteredAmount =>
       double.tryParse(commentController.text.replaceAll(',', '').trim()) ?? 0;
@@ -104,11 +106,12 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
 
   Future<void> submitBid() async {
     if (_isSubmitting) return;
+    final localizations = AppLocalizations.of(context);
     final bidAmount =
         double.tryParse(commentController.text.replaceAll(',', '').trim());
     if (bidAmount == null || bidAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid bid amount.')),
+        SnackBar(content: Text(localizations.tr('enterValidBidAmount'))),
       );
       return;
     }
@@ -118,14 +121,14 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
     final hadExisting = _existingBidId != null;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Submitting bid...')),
+      SnackBar(content: Text(localizations.tr('submittingBid'))),
     );
 
     try {
       final bidId = await FirestoreService().upsertMyBid(
         threadId: widget.threadDoc,
         bidAmount: bidAmount,
-        currency: 'Birr',
+        currency: _defaultCurrency,
         carrierNotes: carrierNotesController.text,
       );
       _existingBidId = bidId;
@@ -135,7 +138,10 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
 
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(hadExisting ? 'Bid updated!' : 'Bid submitted!')),
+        SnackBar(
+            content: Text(hadExisting
+                ? localizations.tr('bidUpdated')
+                : localizations.tr('bidSubmittedMsg'))),
       );
     } catch (e) {
       if (!mounted) return;
@@ -158,6 +164,7 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Column(
       children: [
         if (_loadingExistingBid)
@@ -178,21 +185,21 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
                     Navigator.of(context).maybePop();
                   }
                 },
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(
+                child: Text(
+                  localizations.tr('cancel'),
+                  style: const TextStyle(
                       color: Colors.black, fontWeight: FontWeight.bold),
                 ),
               ),
-              const Text(
-                'Reply',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              Text(
+                localizations.tr('bid'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
               ),
               TextButton(
                 onPressed: _isSubmitting ? null : submitBid,
-                child: const Text(
-                  'Post',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                child: Text(
+                  localizations.tr('submit'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -220,9 +227,10 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
               TextField(
                 controller: commentController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Bid Amount (Birr)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText:
+                      '${localizations.tr('bidAmountLabel')} ($_defaultCurrency)',
+                  border: const OutlineInputBorder(),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -238,10 +246,10 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                        'Estimated platform fee (5%): ${_estimatedFee.toStringAsFixed(2)} Birr'),
+                        'Estimated platform fee (5%): ${_estimatedFee.toStringAsFixed(2)} $_defaultCurrency'),
                     const SizedBox(height: 4),
                     Text(
-                      'Estimated net payout: ${_estimatedNet.toStringAsFixed(2)} Birr',
+                      'Estimated net payout: ${_estimatedNet.toStringAsFixed(2)} $_defaultCurrency',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -250,9 +258,9 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: carrierNotesController,
-                decoration: const InputDecoration(
-                  labelText: 'Notes (optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: localizations.tr('notesOptional'),
+                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 2,
               ),
@@ -263,3 +271,4 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
     );
   }
 }
+

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Kora/utils/error_telemetry.dart';
+import 'package:kora/utils/error_telemetry.dart';
 
 import 'backend_auth_service.dart';
 import 'backend_config.dart';
@@ -192,3 +192,4 @@ class FirestoreService {
     );
   }
 }
+

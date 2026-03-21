@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Kora/utils/delivery_status.dart';
-import 'package:Kora/app_localizations.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
 
 class MyLoadsScreen extends StatefulWidget {
   final String cargoUserId;
-  const MyLoadsScreen({Key? key, required this.cargoUserId}) : super(key: key);
+  const MyLoadsScreen({super.key, required this.cargoUserId});
 
   @override
   State<MyLoadsScreen> createState() => _MyLoadsScreenState();
@@ -61,7 +61,7 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         leading: IconButton(
-          tooltip: 'Back',
+          tooltip: localizations.tr('back'),
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
@@ -124,9 +124,10 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
               final status = deliveryStatusLabel((load['deliveryStatus'] ?? 'pending_bids').toString());
 
               return ListTile(
-                title: Text(title.isEmpty ? 'Load ${index + 1}' : title),
+                title: Text(
+                    title.isEmpty ? '${localizations.tr('loadIndex')} ${index + 1}' : title),
                 subtitle: Text('${localizations.tr('from')}: $start\n${localizations.tr('to')}: $end\n${localizations.tr('status')}: $status'),
-                trailing: Text('$bidsCount bids'),
+                trailing: Text('$bidsCount ${localizations.tr('bidsCount')}'),
                 isThreeLine: true,
                 onTap: () {
                   // Intentionally left lightweight; detailed management happens in CommentScreen.
@@ -139,3 +140,4 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
     );
   }
 }
+

@@ -85,6 +85,7 @@ class BackendAuthService {
     required String name,
     required String userType,
     String? username,
+    String? phoneNumber,
     String? truckType,
     String? address,
   }) async {
@@ -97,6 +98,7 @@ class BackendAuthService {
         'name': name,
         'userType': userType,
         'username': username,
+        'phoneNumber': phoneNumber,
         'truckType': truckType,
         'address': address,
       },
@@ -106,6 +108,30 @@ class BackendAuthService {
     final userMap = (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
     await _saveSession(token: token, user: userMap);
     return _toUserModel(userMap);
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    await _request(
+      path: '/api/auth/forgot-password',
+      method: 'POST',
+      body: {'email': email},
+    );
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    await _request(
+      path: '/api/auth/reset-password',
+      method: 'POST',
+      body: {
+        'email': email,
+        'token': token,
+        'password': newPassword,
+      },
+    );
   }
 
   Future<UserModel?> restoreSession() async {
@@ -170,3 +196,4 @@ class BackendAuthService {
     await prefs.setString(_userKey, jsonEncode(user));
   }
 }
+

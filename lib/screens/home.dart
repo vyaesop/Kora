@@ -1,18 +1,18 @@
 // home.dart
-import 'package:Kora/screens/TrackLoadsScreen.dart';
+import 'package:kora/screens/track_loads_screen.dart';
 import 'package:flutter/material.dart';
-// ← Can be removed after update
-import 'package:Kora/screens/post_screen.dart';
-import 'package:Kora/screens/profile_screen.dart';
-import 'package:Kora/screens/feed.dart';
-import 'package:Kora/screens/search.dart';
-import 'package:Kora/screens/my_bids.dart'; // Add this import
-import 'package:Kora/model/user.dart';
+import 'package:kora/screens/post_screen.dart';
+import 'package:kora/screens/profile_screen.dart';
+import 'package:kora/screens/feed.dart';
+import 'package:kora/screens/search.dart';
+import 'package:kora/screens/my_bids.dart'; // Add this import
+import 'package:kora/model/user.dart';
 // removed unused geolocator imports
-import 'package:Kora/utils/driver_location_service.dart';
-import 'package:Kora/screens/pre_feed_cargo.dart';
-import 'package:Kora/screens/pre_feed_driver.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/driver_location_service.dart';
+import 'package:kora/screens/pre_feed_cargo.dart';
+import 'package:kora/screens/pre_feed_driver.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/app_localizations.dart';
 
 DriverLocationService? _locationService;
 
@@ -35,13 +35,11 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   final _authService = BackendAuthService();
-  int selectedIndex = 1;
+  int selectedIndex = 0;
   // Remove PanelController since we're not using sliding panel anymore
   UserModel? currentUser;
   bool isLoading = true;
   DriverLocationService? _locationService; // Make it nullable
-  bool _prefeedLoaded = false;
-  bool _showPrefeed = false;
 
   int get _feedTabIndex => 1;
 
@@ -68,50 +66,34 @@ class _HomeState extends State<Home> {
     final sessionUser = await _authService.restoreSession();
     if (!mounted) return;
     if (sessionUser == null) {
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/login');
       return;
     }
     try {
       setState(() {
         currentUser = sessionUser;
-        selectedIndex = _feedTabIndex;
+        selectedIndex = 0;
       });
       await _checkAndStartLocationUpdates(currentUser!);
-      _loadPrefeedFlag();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to load user: $e")),
       );
     } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
-  }
-
-  void _loadPrefeedFlag() {
-    if (!mounted) return;
-    setState(() {
-      _showPrefeed = true;
-      _prefeedLoaded = true;
-    });
-  }
-
-  Future<void> _markPrefeedSeen({bool goToFeed = true}) async {
-    if (!mounted) return;
-    setState(() {
-      _showPrefeed = false;
-      if (goToFeed) {
-        selectedIndex = _feedTabIndex;
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
       }
-    });
+    }
   }
 
   void _openProfileTab() {
     if (!mounted) return;
     setState(() {
       selectedIndex = _profileTabIndex;
-      _showPrefeed = false;
     });
   }
 
@@ -119,105 +101,18 @@ class _HomeState extends State<Home> {
     if (!mounted) return;
     setState(() {
       selectedIndex = index;
-      _showPrefeed = false;
     });
   }
 
-  // Dynamically build pages based on user type
-  List<Widget> get _pages {
-    if (currentUser?.userType == 'Cargo') {
+  List<Widget> _buildPages() {
+    final user = currentUser;
+    if (user?.userType == 'Cargo') {
       return [
-        const FeedScreen(),
-        const FeedScreen(),
-        const SizedBox(), // Placeholder for the plus button
-        const TrackLoadsScreen(),
-        const ProfileScreen(),
-      ];
-    } else if (currentUser?.userType == 'Driver') {
-      return [
-        const FeedScreen(),
-        const FeedScreen(),
-        const MyBidsScreen(),
-        const SearchScreen(),
-        const ProfileScreen(),
-      ];
-    } else {
-      return [
-        const FeedScreen(),
-        const FeedScreen(),
-        const SearchScreen(),
-        const ProfileScreen(),
-      ];
-    }
-  }
-
-  // Dynamically build bottom nav items
-  List<BottomNavigationBarItem> get _navItems {
-    if (currentUser?.userType == 'Cargo') {
-      return [
-        const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.rss_feed), label: 'Feed'),
-        BottomNavigationBarItem(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: Color(0xFF000000),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.add, color: Colors.white, size: 24),
-          ),
-          label: '',
-        ),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.location_on), label: 'Track'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.person), label: 'Profile'),
-      ];
-    } else if (currentUser?.userType == 'Driver') {
-      return [
-        const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.rss_feed), label: 'Feed'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.local_offer), label: 'My Bids'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.search), label: 'Search'),
-        const BottomNavigationBarItem(
-            icon: Icon(Icons.person), label: 'Profile'),
-      ];
-    } else {
-      return const [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.rss_feed), label: 'Feed'),
-        BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
-        BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-      ];
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (!_prefeedLoaded && currentUser != null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_showPrefeed && currentUser != null) {
-      if (currentUser!.userType == 'Cargo') {
-        return PreFeedCargoScreen(
-          user: currentUser!,
-          onContinueToFeed: _markPrefeedSeen,
-          onPostLoad: () async {
-            await _markPrefeedSeen(goToFeed: false);
-            if (!mounted) return;
+        PreFeedCargoScreen(
+          user: user!,
+          embedded: true,
+          onContinueToFeed: () => _openTab(_feedTabIndex),
+          onPostLoad: () {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const PostScreen()),
@@ -225,39 +120,109 @@ class _HomeState extends State<Home> {
           },
           onOpenProfile: _openProfileTab,
           onSelectTab: _openTab,
-        );
-      }
-      if (currentUser!.userType == 'Driver') {
-        return PreFeedDriverScreen(
-          user: currentUser!,
-          onContinueToFeed: _markPrefeedSeen,
+        ),
+        const FeedScreen(),
+        const SizedBox(),
+        const TrackLoadsScreen(showBack: false),
+        const ProfileScreen(),
+      ];
+    }
+    if (user?.userType == 'Driver') {
+      return [
+        PreFeedDriverScreen(
+          user: user!,
+          embedded: true,
+          onContinueToFeed: () => _openTab(_feedTabIndex),
           onOpenProfile: _openProfileTab,
           onSelectTab: _openTab,
-        );
-      }
+        ),
+        const FeedScreen(),
+        const MyBidsScreen(),
+        const SearchScreen(),
+        const ProfileScreen(),
+      ];
     }
+    return [
+      const FeedScreen(),
+      const FeedScreen(),
+      const SearchScreen(),
+      const ProfileScreen(),
+    ];
+  }
 
-    final pages = _pages;
-    final navItems = _navItems;
+  List<BottomNavigationBarItem> _buildNavItems(AppLocalizations localizations) {
+    if (currentUser?.userType == 'Cargo') {
+      return [
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.home), label: localizations.tr('home')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+        BottomNavigationBarItem(
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade600,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.add, color: Colors.white, size: 24),
+          ),
+          label: localizations.tr('post'),
+        ),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.location_on),
+            label: localizations.tr('track')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.person), label: localizations.tr('profile')),
+      ];
+    }
+    if (currentUser?.userType == 'Driver') {
+      return [
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.home), label: localizations.tr('home')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.local_offer),
+            label: localizations.tr('myBids')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.search),
+            label: localizations.tr('search')),
+        BottomNavigationBarItem(
+            icon: const Icon(Icons.person), label: localizations.tr('profile')),
+      ];
+    }
+    return [
+      BottomNavigationBarItem(
+          icon: const Icon(Icons.home), label: localizations.tr('home')),
+      BottomNavigationBarItem(
+          icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+      BottomNavigationBarItem(
+          icon: const Icon(Icons.search), label: localizations.tr('search')),
+      BottomNavigationBarItem(
+          icon: const Icon(Icons.person), label: localizations.tr('profile')),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final pages = _buildPages();
+    final navItems = _buildNavItems(localizations);
 
     return Scaffold(
       // ✅ Removed SlidingUpPanel, now just normal body
       body: pages[selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
-        selectedItemColor: const Color(0xFF000000),
-        unselectedItemColor: Colors.grey,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
         items: navItems,
         onTap: (index) async {
-          // Handle Pre-feed tab (always index 0)
-          if (index == 0) {
-            await _openPrefeedScreen();
-            return;
-          }
-
           // Handle Cargo user's "+" button
           if (currentUser?.userType == 'Cargo' && index == _postTabIndex) {
             Navigator.push(
@@ -277,56 +242,5 @@ class _HomeState extends State<Home> {
     );
   }
 
-  Future<void> _openPrefeedScreen() async {
-    if (!mounted || currentUser == null) return;
-    if (currentUser!.userType == 'Cargo') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PreFeedCargoScreen(
-            user: currentUser!,
-            onContinueToFeed: () {
-              Navigator.of(context).pop();
-              _openTab(_feedTabIndex);
-            },
-            onPostLoad: () async {
-              Navigator.of(context).pop();
-              if (!mounted) return;
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PostScreen()),
-              );
-            },
-            onOpenProfile: () {
-              Navigator.of(context).pop();
-              _openProfileTab();
-            },
-            onSelectTab: (int idx) {
-              Navigator.of(context).pop();
-              _openTab(idx);
-            },
-          ),
-        ),
-      );
-    } else {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PreFeedDriverScreen(
-            user: currentUser!,
-            onContinueToFeed: () {
-              Navigator.of(context).pop();
-              _openTab(_feedTabIndex);
-            },
-            onOpenProfile: () {
-              Navigator.of(context).pop();
-              _openProfileTab();
-            },
-            onSelectTab: (int idx) {
-              Navigator.of(context).pop();
-              _openTab(idx);
-            },
-          ),
-        ),
-      );
-    }
-  }
 }
+

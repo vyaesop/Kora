@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:Kora/utils/experiment_service.dart';
+import 'package:kora/utils/experiment_service.dart';
 
 void main() {
   group('ExperimentService', () {
@@ -29,3 +29,4 @@ void main() {
     });
   });
 }
+

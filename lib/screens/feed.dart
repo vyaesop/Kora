@@ -10,3 +10,4 @@ class FeedScreen extends StatelessWidget {
     return const SearchScreen();
   }
 }
+

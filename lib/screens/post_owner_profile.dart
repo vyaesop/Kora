@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:Kora/model/thread_message.dart';
-import 'package:Kora/model/user.dart';
-import 'package:Kora/widgets/thread_message.dart';
-import 'package:Kora/screens/comment_screen.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/model/thread_message.dart';
+import 'package:kora/model/user.dart';
+import 'package:kora/widgets/thread_message.dart';
+import 'package:kora/widgets/profile_avatar.dart';
+import 'package:kora/screens/comment_screen.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/app_localizations.dart';
 
 class PostOwnerProfileScreen extends StatefulWidget {
   final String userId;
@@ -116,6 +118,7 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -125,11 +128,11 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Profile'),
+        title: Text(localizations.tr('profile')),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(30.0),
+          padding: const EdgeInsets.all(16.0),
           child: FutureBuilder<UserModel>(
             future: userFuture,
             builder: (context, snapshot) {
@@ -139,31 +142,38 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ListTile(
-                            title: Text(user.name),
-                            subtitle: Text('@${user.username}'),
-                            trailing: CircleAvatar(
-                              backgroundImage:
-                                  NetworkImage(user.profileImageUrl ?? ""),
-                              radius: 25,
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(user.name),
+                                subtitle: Text('@${user.username}'),
+                                trailing: ProfileAvatar(
+                                  imageUrl: user.profileImageUrl,
+                                  radius: 25,
+                                ),
+                              ),
                             ),
                           ),
-                          Text(user.bio ?? 'Bio needs to be here...'),
-                          const SizedBox(height: 25),
+                          const SizedBox(height: 10),
+                          Text(user.bio ?? localizations.tr('noBio')),
+                          const SizedBox(height: 20),
                           if (user.userType == 'Driver') ...[
-                            Text("Truck Type: ${user.truckType ?? 'N/A'}"),
+                            Text(
+                                "${localizations.tr('truckType')}: ${user.truckType ?? 'N/A'}"),
                             const SizedBox(height: 10),
                             Text(
-                                "License Plate: ${user.licensePlate ?? 'N/A'}"),
+                                "${localizations.tr('licensePlate')}: ${user.licensePlate ?? 'N/A'}"),
                             const SizedBox(height: 10),
                             Text(
-                                "License Number: ${user.licenseNumber ?? 'N/A'}"),
+                                "${localizations.tr('licenseNumber')}: ${user.licenseNumber ?? 'N/A'}"),
                             const SizedBox(height: 10),
                             Text(
-                                "Trade License: ${user.tradeLicense ?? 'N/A'}"),
+                                "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}"),
                           ] else if (user.userType == 'Cargo') ...[
                             Text(
-                                "Trade License: ${user.tradeLicense ?? 'N/A'}"),
+                                "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}"),
                           ],
                           const SizedBox(height: 25),
                           Expanded(
@@ -172,6 +182,11 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                               builder: (context, snapshot) {
                                 if (snapshot.hasData) {
                                   final userThreads = snapshot.data!;
+                                  if (userThreads.isEmpty) {
+                                    return Center(
+                                      child: Text(localizations.tr('noLoadsPostedYet')),
+                                    );
+                                  }
                                   return ListView.builder(
                                     itemCount: userThreads.length,
                                     itemBuilder: (context, index) {
@@ -222,7 +237,7 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                           ),
                         ],
                       )
-                    : const Center(child: Text("User not found"));
+                    : Center(child: Text(localizations.tr('userNotFound')));
               }
               return const CircularProgressIndicator();
             },
@@ -235,14 +250,15 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
   Future<void> likeThreadMessage(String id) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Likes sync is being migrated to backend.')),
+      SnackBar(content: Text(AppLocalizations.of(context).tr('likesSyncMigration'))),
     );
   }
 
   Future<void> dislikeThreadMessage(String id) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Likes sync is being migrated to backend.')),
+      SnackBar(content: Text(AppLocalizations.of(context).tr('likesSyncMigration'))),
     );
   }
 }
+

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:Kora/utils/delivery_status.dart';
+import 'package:kora/utils/delivery_status.dart';
 
 void main() {
   group('deliveryStatusLabel', () {
@@ -24,3 +24,4 @@ void main() {
     });
   });
 }
+

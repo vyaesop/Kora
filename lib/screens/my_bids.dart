@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:Kora/model/thread_message.dart';
-import 'package:Kora/screens/comment_screen.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/model/thread_message.dart';
+import 'package:kora/screens/comment_screen.dart';
+import 'package:kora/utils/error_handler.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/firestore_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/app_localizations.dart';
 
 class MyBidsScreen extends StatefulWidget {
   const MyBidsScreen({super.key});
@@ -17,6 +20,43 @@ class MyBidsScreen extends StatefulWidget {
 class _MyBidsScreenState extends State<MyBidsScreen> {
   final BackendAuthService _authService = BackendAuthService();
   int _reloadToken = 0;
+
+  Future<void> _deleteBid(String bidId, String threadId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context).tr('withdrawBid')),
+        content: Text(AppLocalizations.of(context).tr('withdrawBidConfirmation')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLocalizations.of(context).tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(AppLocalizations.of(context).tr('withdraw')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirestoreService().deleteBid(threadId: threadId, bidId: bidId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).tr('bidWithdrawn'))),
+      );
+      setState(() => _reloadToken++);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${AppLocalizations.of(context).tr('error')}: ${ErrorHandler.getMessage(e)}')),
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> _authedRequest(String path) async {
     final token = await _authService.getToken();
@@ -113,12 +153,13 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        title: const Text('My Bids'),
+        title: Text(localizations.tr('myBids')),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         key: ValueKey(_reloadToken),
@@ -130,27 +171,36 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
 
           if (snapshot.hasError) {
             return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Failed to load bids: ${snapshot.error}'),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () => setState(() => _reloadToken++),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                    const SizedBox(height: 16),
+                    Text(
+                      ErrorHandler.getMessage(snapshot.error!),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () => setState(() => _reloadToken++),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(localizations.tr('retry')),
+                    ),
+                  ],
+                ),
               ),
             );
           }
 
           final bids = snapshot.data ?? const <Map<String, dynamic>>[];
           if (bids.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
-                'You have not placed any bids yet.',
-                style: TextStyle(color: Colors.black54),
+                localizations.tr('noBidsPlacedYet'),
+                style: const TextStyle(color: Colors.black54),
               ),
             );
           }
@@ -161,6 +211,7 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final bid = bids[index];
+              final bidId = (bid['id'] ?? '').toString();
               final thread = (bid['load'] as Map<String, dynamic>? ?? const {});
               final amount = (bid['amount'] as num?)?.toDouble() ?? 0.0;
               final status = (bid['status'] ?? 'pending').toString();
@@ -169,29 +220,41 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
 
               return Card(
                 child: ListTile(
-                  title: Text('${threadMessage.start} → ${threadMessage.end}'),
+                  title: Text('${threadMessage.start} -> ${threadMessage.end}'),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 4),
-                      Text('Bid: ${amount.toStringAsFixed(2)} Birr'),
+                      Text(
+                          '${localizations.tr('bid')}: ${amount.toStringAsFixed(2)} Birr'),
                       const SizedBox(height: 4),
-                      Text('Load: ${threadMessage.message}'),
+                      Text('${localizations.tr('loadIndex')}: ${threadMessage.message}'),
                     ],
                   ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _statusColor(status).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      _statusLabel(status),
-                      style: TextStyle(
-                        color: _statusColor(status),
-                        fontWeight: FontWeight.w600,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _statusColor(status)
+                              .withAlpha((0.12 * 255).round()),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _statusLabel(status),
+                          style: TextStyle(
+                            color: _statusColor(status),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (status.toLowerCase() == 'pending')
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _deleteBid(bidId, threadId),
+                        ),
+                    ],
                   ),
                   onTap: threadId.isEmpty
                       ? null
@@ -215,3 +278,4 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
     );
   }
 }
+

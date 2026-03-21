@@ -2,17 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:Kora/model/user.dart';
-import 'package:Kora/utils/delivery_status.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
-import '../widgets/Language_Switcher.dart';
+import 'package:kora/model/user.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/app_theme.dart';
+import '../widgets/language_switcher.dart';
+import '../app_localizations.dart';
 
-class PreFeedDriverScreen extends StatelessWidget {
+class PreFeedDriverScreen extends StatefulWidget {
   final UserModel user;
   final VoidCallback onContinueToFeed;
   final VoidCallback onOpenProfile;
   final void Function(int index) onSelectTab;
+  final bool embedded;
 
   const PreFeedDriverScreen({
     super.key,
@@ -20,112 +23,189 @@ class PreFeedDriverScreen extends StatelessWidget {
     required this.onContinueToFeed,
     required this.onOpenProfile,
     required this.onSelectTab,
+    this.embedded = false,
   });
 
   @override
-  Widget build(BuildContext context) {
-    Future<Map<String, dynamic>> authedRequest(String path) async {
-      final token = await BackendAuthService().getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Not signed in');
-      }
+  State<PreFeedDriverScreen> createState() => _PreFeedDriverScreenState();
+}
 
-      final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-      final client = HttpClient();
-      try {
-        final req = await client.getUrl(uri);
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-        final res = await req.close();
-        final raw = await utf8.decoder.bind(res).join();
-        final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-        if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-          throw Exception((data['error'] ?? 'Request failed').toString());
-        }
-        return data;
-      } finally {
-        client.close(force: true);
-      }
+class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
+  late Future<List<Map<String, dynamic>>> _suggestedLoadsFuture;
+  late Future<List<Map<String, dynamic>>> _acceptedLoadsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _suggestedLoadsFuture = _fetchSuggestedLoads();
+    _acceptedLoadsFuture = _fetchAcceptedLoads();
+  }
+
+  Future<Map<String, dynamic>> _authedRequest(String path) async {
+    final token = await BackendAuthService().getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Not signed in');
     }
 
-    final suggestedLoadsFuture = authedRequest('/api/threads').then((data) {
-      return (data['threads'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .take(5)
-          .toList();
-    });
+    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(uri);
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      final res = await req.close();
+      final raw = await utf8.decoder.bind(res).join();
+      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
+      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
+        throw Exception((data['error'] ?? 'Request failed').toString());
+      }
+      return data;
+    } finally {
+      client.close(force: true);
+    }
+  }
 
-    final acceptedIds = (user.acceptedLoads ?? []).take(10).toSet();
-    final acceptedLoadsFuture = authedRequest('/api/threads').then((data) {
-      final threads = (data['threads'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .where((thread) => acceptedIds.contains((thread['id'] ?? '').toString()))
-          .toList();
-      return threads;
-    });
+  Future<List<Map<String, dynamic>>> _fetchSuggestedLoads() async {
+    final data = await _authedRequest('/api/threads');
+    return (data['threads'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .take(5)
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAcceptedLoads() async {
+    final acceptedIds = (widget.user.acceptedLoads ?? []).take(10).toSet();
+    if (acceptedIds.isEmpty) return [];
+    
+    final data = await _authedRequest('/api/threads');
+    return (data['threads'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .where((thread) => acceptedIds.contains((thread['id'] ?? '').toString()))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 245, 245, 247),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        automaticallyImplyLeading: false,
-        title: Text('Welcome, ${user.name}'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: LanguageSwitcher(),
-          )
-        ],
-      ),
+      backgroundColor: AppPalette.surface,
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              elevation: 0,
+              backgroundColor: AppPalette.card,
+              foregroundColor: AppPalette.ink,
+              automaticallyImplyLeading: false,
+              title: Text('${localizations.tr('welcome')}, ${widget.user.name}'),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: LanguageSwitcher(),
+                )
+              ],
+            ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.embedded) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${localizations.tr('welcome')}, ${widget.user.name}',
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w700),
+                    ),
+                    const LanguageSwitcher(),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppPalette.card,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'Driver Operations Hub',
-                      style:
-                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                      localizations.tr('driverHubTitle'),
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w700),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
-                      'Monitor active jobs, discover new loads, and keep profile documents up to date.',
-                      style: TextStyle(color: Colors.black54),
+                      localizations.tr('driverHubSubtitle'),
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: AppPalette.heroGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      localizations.tr('feedTitle'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      localizations.tr('feedSubtitle'),
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton.icon(
+                        onPressed: widget.onContinueToFeed,
+                        icon: const Icon(Icons.rss_feed),
+                        label: Text(localizations.tr('openFeed')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppPalette.ink,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
               _SectionHeader(
-                title: 'Quick Actions',
-                actionText: 'Go to Feed',
-                onAction: onContinueToFeed,
+                title: localizations.tr('quickActions'),
+                actionText: localizations.tr('continueToFeed'),
+                onAction: widget.onContinueToFeed,
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Find loads quickly or update your documents to get more bids.',
-                style: TextStyle(color: Colors.black54),
+              Text(
+                localizations.tr('driverQuickActionsHint'),
+                style: const TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: onContinueToFeed,
+                      onPressed: widget.onContinueToFeed,
                       icon: const Icon(Icons.search),
-                      label: const Text('Open Feed'),
+                      label: Text(localizations.tr('openFeed')),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -134,9 +214,9 @@ class PreFeedDriverScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: onOpenProfile,
+                      onPressed: widget.onOpenProfile,
                       icon: const Icon(Icons.badge_outlined),
-                      label: const Text('Update Docs'),
+                      label: Text(localizations.tr('updateDocs')),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -145,19 +225,21 @@ class PreFeedDriverScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              _SectionHeader(title: 'Active Jobs'),
+              _SectionHeader(title: localizations.tr('activeJobs')),
               const SizedBox(height: 8),
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: acceptedLoadsFuture,
+                future: _acceptedLoadsFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const _LoadingList();
                   }
                   final docs = snapshot.data ?? const <Map<String, dynamic>>[];
                   if (docs.isEmpty) {
-                    return const _EmptyState(
-                      title: 'No active jobs',
-                      subtitle: 'Bid on loads to start earning.',
+                    return _EmptyState(
+                      title: localizations.tr('noActiveJobs'),
+                      subtitle: localizations.tr('bidOnLoadsHint'),
+                      buttonText: localizations.tr('openFeed'),
+                      onTap: widget.onContinueToFeed,
                     );
                   }
                   return ListView.separated(
@@ -171,9 +253,9 @@ class PreFeedDriverScreen extends StatelessWidget {
                       final end = data['end'] ?? 'Unknown';
                       final status = data['deliveryStatus'] ?? 'pending_bids';
                       return _InfoCard(
-                        title: '$start → $end',
+                        title: '$start -> $end',
                         subtitle:
-                            'Status: ${deliveryStatusLabel(status.toString())}',
+                            '${localizations.tr('status')}: ${deliveryStatusLabel(status.toString())}',
                         trailing: const Icon(Icons.chevron_right),
                       );
                     },
@@ -181,19 +263,21 @@ class PreFeedDriverScreen extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 20),
-              _SectionHeader(title: 'Suggested Loads'),
+              _SectionHeader(title: localizations.tr('suggestedLoads')),
               const SizedBox(height: 8),
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: suggestedLoadsFuture,
+                future: _suggestedLoadsFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const _LoadingList();
                   }
                   final docs = snapshot.data ?? const <Map<String, dynamic>>[];
                   if (docs.isEmpty) {
-                    return const _EmptyState(
-                      title: 'No suggestions yet',
-                      subtitle: 'We will suggest loads based on your routes.',
+                    return _EmptyState(
+                      title: localizations.tr('noSuggestionsYet'),
+                      subtitle: localizations.tr('suggestedLoadsHint'),
+                      buttonText: localizations.tr('openFeed'),
+                      onTap: widget.onContinueToFeed,
                     );
                   }
                   return ListView.separated(
@@ -208,11 +292,12 @@ class PreFeedDriverScreen extends StatelessWidget {
                       final weight = data['weight'] ?? '';
                       final unit = data['weightUnit'] ?? '';
                       return _InfoCard(
-                        title: '$start → $end',
-                        subtitle: 'Weight: $weight $unit',
+                        title: '$start -> $end',
+                        subtitle:
+                            '${localizations.tr('weight')}: $weight $unit',
                         trailing: ElevatedButton(
-                          onPressed: onContinueToFeed,
-                          child: const Text('Bid'),
+                          onPressed: widget.onContinueToFeed,
+                          child: Text(localizations.tr('bid')),
                         ),
                       );
                     },
@@ -222,36 +307,47 @@ class PreFeedDriverScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Center(
                 child: TextButton(
-                  onPressed: onContinueToFeed,
-                  child: const Text('Continue to Feed'),
+                  onPressed: widget.onContinueToFeed,
+                  child: Text(localizations.tr('continueToFeed')),
                 ),
               )
             ],
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: const Color(0xFF000000),
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.preview), label: 'Pre-feed'),
-          BottomNavigationBarItem(icon: Icon(Icons.rss_feed), label: 'Feed'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.local_offer), label: 'My Bids'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-        onTap: (index) {
-          if (index == 0) {
-            return;
-          }
-          onSelectTab(index);
-        },
-      ),
+      bottomNavigationBar: widget.embedded
+          ? null
+          : BottomNavigationBar(
+              currentIndex: 0,
+              selectedItemColor: const Color(0xFF000000),
+              unselectedItemColor: Colors.grey,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
+              type: BottomNavigationBarType.fixed,
+              items: [
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.preview),
+                    label: localizations.tr('home')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.rss_feed),
+                    label: localizations.tr('feed')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.local_offer),
+                    label: localizations.tr('myBids')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.search),
+                    label: localizations.tr('search')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.person),
+                    label: localizations.tr('profile')),
+              ],
+              onTap: (index) {
+                if (index == 0) {
+                  return;
+                }
+                widget.onSelectTab(index);
+              },
+            ),
     );
   }
 }
@@ -306,8 +402,8 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: const [
+    return const Column(
+      children: [
         LinearProgressIndicator(minHeight: 2),
         SizedBox(height: 10),
       ],
@@ -318,8 +414,15 @@ class _LoadingList extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final String title;
   final String subtitle;
+  final String? buttonText;
+  final VoidCallback? onTap;
 
-  const _EmptyState({required this.title, required this.subtitle});
+  const _EmptyState({
+    required this.title,
+    required this.subtitle,
+    this.buttonText,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -335,9 +438,14 @@ class _EmptyState extends StatelessWidget {
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             Text(subtitle),
+            if (buttonText != null && onTap != null) ...[
+              const SizedBox(height: 12),
+              ElevatedButton(onPressed: onTap, child: Text(buttonText!)),
+            ],
           ],
         ),
       ),
     );
   }
 }
+

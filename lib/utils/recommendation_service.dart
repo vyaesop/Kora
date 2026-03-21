@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:Kora/model/thread_message.dart';
+import 'package:kora/model/thread_message.dart';
 
 class RecommendationService {
   static const _routeKey = 'recent_route_tokens';
@@ -56,3 +56,4 @@ class RecommendationService {
     return parts.isEmpty ? '' : parts.first;
   }
 }
+

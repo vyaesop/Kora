@@ -96,3 +96,4 @@ class ThreadMessage {
   factory ThreadMessage.fromJson(String source) =>
       ThreadMessage.fromMap(json.decode(source) as Map<String, dynamic>);
 }
+

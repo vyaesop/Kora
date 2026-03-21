@@ -3,9 +3,11 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt, { JwtPayload } from 'jsonwebtoken';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -40,6 +42,13 @@ const driverLocationStore = new Map<
 const port = Number(process.env.PORT || 3000);
 const jwtSecret = process.env.JWT_SECRET || 'replace-this-jwt-secret';
 const bootstrapSuperAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
+const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+const appDeepLinkScheme = process.env.APP_DEEPLINK_SCHEME || 'kora';
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS;
+const smtpFrom = process.env.SMTP_FROM || 'no-reply@kora.app';
 const corsOrigins = (process.env.CORS_ORIGINS || '*')
   .split(',')
   .map((value) => value.trim())
@@ -52,10 +61,29 @@ app.use(
 );
 app.use(express.json());
 
+const getMailer = () => {
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    return null;
+  }
+  return nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: {
+      user: smtpUser,
+      pass: smtpPass,
+    },
+  });
+};
+
 const sanitizeUser = (user: {
   id: string;
   email: string;
   name: string;
+  username?: string | null;
+  phoneNumber?: string | null;
+  truckType?: string | null;
+  verificationStatus?: string | null;
   userType: string;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -63,6 +91,10 @@ const sanitizeUser = (user: {
   id: user.id,
   email: user.email,
   name: user.name,
+  username: user.username ?? null,
+  phoneNumber: user.phoneNumber ?? null,
+  truckType: user.truckType ?? null,
+  verificationStatus: user.verificationStatus ?? 'pending',
   userType: user.userType,
   isAdmin: user.isAdmin,
   isSuperAdmin: user.isSuperAdmin,
@@ -141,6 +173,9 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const password = String(req.body?.password || '');
     const name = String(req.body?.name || '').trim();
     const userType = String(req.body?.userType || 'Cargo').trim();
+    const username = String(req.body?.username || '').trim();
+    const phoneNumber = String(req.body?.phoneNumber || '').trim();
+    const truckType = String(req.body?.truckType || '').trim();
 
     if (!email || !password || !name) {
       res.status(400).json({ ok: false, error: 'email, password, and name are required' });
@@ -160,11 +195,18 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         passwordHash,
         name,
         userType,
+        username: username.length === 0 ? null : username,
+        phoneNumber: phoneNumber.length === 0 ? null : phoneNumber,
+        truckType: truckType.length === 0 ? null : truckType,
       },
       select: {
         id: true,
         email: true,
         name: true,
+        username: true,
+        phoneNumber: true,
+        truckType: true,
+        verificationStatus: true,
         userType: true,
         isAdmin: true,
         isSuperAdmin: true,
@@ -174,6 +216,13 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const token = signUserToken({ userId: user.id, email: user.email });
     res.status(201).json({ ok: true, token, user: sanitizeUser(user) });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target)
+        ? error.meta?.target.join(', ')
+        : String(error.meta?.target ?? 'field');
+      res.status(409).json({ ok: false, error: `${target} already exists` });
+      return;
+    }
     const message = error instanceof Error ? error.message : 'Registration failed';
     res.status(500).json({ ok: false, error: message });
   }
@@ -220,6 +269,124 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+      res.status(400).json({ ok: false, error: 'email is required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, email: true },
+    });
+
+    // Intentionally return ok even if the email does not exist.
+    if (!user) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const mailer = getMailer();
+    if (!mailer) {
+      res.status(500).json({ ok: false, error: 'Email service not configured' });
+      return;
+    }
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    const resetUrl = `${appBaseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(
+      user.email,
+    )}`;
+    const deepLinkUrl = `${appDeepLinkScheme}://reset-password?token=${rawToken}&email=${encodeURIComponent(
+      user.email,
+    )}`;
+
+    await mailer.sendMail({
+      to: user.email,
+      from: smtpFrom,
+      subject: 'Reset your Kora password',
+      text:
+        `Hi ${user.name},\n\nUse this link to reset your password:\n${resetUrl}\n\n` +
+        `If you have the mobile app installed, you can also open:\n${deepLinkUrl}\n\n` +
+        `This link expires in 1 hour.`,
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to start reset';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const token = String(req.body?.token || '').trim();
+    const newPassword = String(req.body?.password || '');
+
+    if (!email || !token || !newPassword) {
+      res.status(400).json({ ok: false, error: 'email, token, and password are required' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (!user) {
+      res.status(400).json({ ok: false, error: 'Invalid reset token' });
+      return;
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const reset = await prisma.passwordResetToken.findFirst({
+      where: {
+        userId: user.id,
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!reset) {
+      res.status(400).json({ ok: false, error: 'Invalid or expired reset token' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetToken.update({
+        where: { id: reset.id },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to reset password';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
 app.get('/api/auth/me', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = req.auth?.userId;
@@ -234,6 +401,10 @@ app.get('/api/auth/me', requireAuth, async (req: AuthedRequest, res: Response) =
         id: true,
         email: true,
         name: true,
+        username: true,
+        phoneNumber: true,
+        truckType: true,
+        verificationStatus: true,
         userType: true,
         isAdmin: true,
         isSuperAdmin: true,
@@ -609,20 +780,30 @@ app.get('/api/threads/:threadId/bids', requireAuth, async (req: AuthedRequest, r
   try {
     const threadId = asSingleParam(req.params.threadId);
 
-    const bids = await prisma.bid.findMany({
-      where: { loadId: threadId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        loadId: true,
-        driverId: true,
-        amount: true,
-        status: true,
-        note: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+      const bids = await prisma.bid.findMany({
+        where: { loadId: threadId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          loadId: true,
+          driverId: true,
+          amount: true,
+          status: true,
+          note: true,
+          createdAt: true,
+          updatedAt: true,
+          driver: {
+            select: {
+              id: true,
+              name: true,
+              profileImageUrl: true,
+              ratingAverage: true,
+              ratingCount: true,
+              phoneNumber: true,
+            },
+          },
+        },
+      });
 
     res.json({ ok: true, bids });
   } catch (error) {

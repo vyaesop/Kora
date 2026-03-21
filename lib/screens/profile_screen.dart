@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:kora/utils/error_handler.dart';
 import '../model/thread_message.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_http.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/thread_message.dart';
 import 'comment_screen.dart';
+import '../app_localizations.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -105,22 +108,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = ErrorHandler.getMessage(e);
       });
     }
   }
 
   Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context).tr('logout')),
+        content: Text(AppLocalizations.of(context).tr('logoutConfirmation')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLocalizations.of(context).tr('cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(AppLocalizations.of(context).tr('logout')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     await _authService.clearSession();
     if (!mounted) return;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   Widget _threadList(List<ThreadMessage> threads) {
     if (threads.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('No items yet.'),
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(AppLocalizations.of(context).tr('noItemsYet')),
       );
     }
 
@@ -156,6 +184,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     if (_loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -164,7 +193,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: Text(localizations.tr('profile'))),
         body: Center(child: Text(_error!)),
       );
     }
@@ -175,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: Text(localizations.tr('profile')),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -183,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
+            tooltip: localizations.tr('logout'),
             onPressed: _signOut,
           ),
         ],
@@ -196,27 +225,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      (user['name'] ?? 'Unknown').toString(),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ProfileAvatar(
+                      imageUrl: user['profileImageUrl']?.toString(),
+                      radius: 30,
                     ),
-                    const SizedBox(height: 6),
-                    Text((user['email'] ?? '').toString()),
-                    Text('Type: ${(user['userType'] ?? 'Cargo').toString()}'),
-                    Text('Rating: ${ratingAvg.toStringAsFixed(2)} ($ratingCount)'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (user['name'] ?? 'Unknown').toString(),
+                            style: const TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text((user['email'] ?? '').toString()),
+                          const SizedBox(height: 2),
+                          Text(
+                              '${localizations.tr('typeLabel')}: ${(user['userType'] ?? 'Cargo').toString()}'),
+                          Text(
+                              '${localizations.tr('ratingLabel')}: ${ratingAvg.toStringAsFixed(2)} ($ratingCount)'),
+                        ],
+                      ),
+                    )
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            const Text('My Loads', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(localizations.tr('myLoads'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             _threadList(_myThreads),
             const SizedBox(height: 16),
-            const Text('Accepted Loads', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(localizations.tr('acceptedLoads'),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 8),
             _threadList(_acceptedLoads),
           ],
@@ -225,3 +272,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+

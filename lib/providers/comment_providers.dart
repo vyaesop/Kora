@@ -9,3 +9,4 @@ final bidsProvider =
     StreamProvider.family<List<Map<String, dynamic>>, String>((ref, threadId) {
   return const Stream.empty();
 });
+

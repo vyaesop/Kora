@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:Kora/model/thread_message.dart';
-import 'package:Kora/utils/recommendation_service.dart';
+import 'package:kora/model/thread_message.dart';
+import 'package:kora/utils/recommendation_service.dart';
 
 ThreadMessage _thread({
   required String start,
@@ -54,3 +54,4 @@ void main() {
     });
   });
 }
+

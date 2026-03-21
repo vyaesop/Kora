@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:Kora/utils/firestore_service.dart';
-import 'package:Kora/utils/delivery_status.dart';
+import 'package:kora/utils/firestore_service.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/app_localizations.dart';
 
 class DriverStatusControls extends StatefulWidget {
   final String threadId;
@@ -44,11 +45,15 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
   String normalizeStatus(String s) {
     final key = s.toLowerCase();
     if (key == 'accepted') return 'accepted';
-    if (key == 'driving' || key == 'driving_to_location')
+    if (key == 'driving' || key == 'driving_to_location') {
       return 'driving_to_location';
-    if (key == 'picked' || key == 'picked_up') return 'picked_up';
-    if (key == 'on_the_road' || key == 'ontheroad' || key == 'onroad')
+    }
+    if (key == 'picked' || key == 'picked_up') {
+      return 'picked_up';
+    }
+    if (key == 'on_the_road' || key == 'ontheroad' || key == 'onroad') {
       return 'on_the_road';
+    }
     if (key == 'delivered' || key == 'completed') return 'delivered';
     return s;
   }
@@ -107,20 +112,23 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
         nextStatus: status,
       );
       if (mounted) {
+        final localizations = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:
-                  Text('Status updated to ${deliveryStatusLabel(status)}.')),
+                  Text(
+                      '${localizations.tr('statusUpdatedTo')} ${deliveryStatusLabel(status)}.')),
         );
       }
       await _flushQueuedUpdates();
     } catch (e) {
       await _queueStatusUpdate(status);
       if (mounted) {
+        final localizations = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  'You appear offline. Status queued and will sync automatically.')),
+                  localizations.tr('offlineStatusQueued'))),
         );
       }
     } finally {
@@ -130,6 +138,7 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     final normalized = normalizeStatus(widget.currentStatus);
 
     // Accepted means first actionable state is "driving_to_location".
@@ -160,10 +169,10 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
         const SizedBox(height: 8),
         Text(
           unknownStatus
-              ? 'Current Status: ${deliveryStatusLabel(widget.currentStatus)}'
+              ? '${localizations.tr('currentStatusLabel')}: ${deliveryStatusLabel(widget.currentStatus)}'
               : (normalized == 'accepted'
-                  ? 'Current Status: ${deliveryStatusLabel('accepted')}'
-                  : 'Current Status: ${_labels[currentIndex]}'),
+                  ? '${localizations.tr('currentStatusLabel')}: ${deliveryStatusLabel('accepted')}'
+                  : '${localizations.tr('currentStatusLabel')}: ${_labels[currentIndex]}'),
           style:
               const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
         ),
@@ -190,3 +199,4 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
     );
   }
 }
+

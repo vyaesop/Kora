@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_config.dart';
+import '../app_localizations.dart';
 
 class PlaceBidWidget extends StatefulWidget {
   final String threadId;
@@ -129,6 +130,7 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
   Future<void> _placeBid() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+    final localizations = AppLocalizations.of(context);
     final hadExisting = _existingBidId != null;
     try {
       final messenger = ScaffoldMessenger.of(context);
@@ -146,7 +148,10 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
       _existingBidId = bidId;
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(hadExisting ? 'Bid updated successfully!' : 'Bid placed successfully!')),
+        SnackBar(
+            content: Text(hadExisting
+                ? localizations.tr('bidUpdatedSuccess')
+                : localizations.tr('bidPlacedSuccess'))),
       );
     } catch (e) {
       if (mounted) {
@@ -160,6 +165,7 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(12),
@@ -182,22 +188,26 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
                   color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'You already bid on this load. Editing this form updates your current bid.',
-                  style: TextStyle(fontSize: 12),
+                child: Text(
+                  localizations.tr('alreadyBidUpdateNotice'),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             TextFormField(
               controller: _amountController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: 'Bid Amount (Birr)',
+                labelText: '${localizations.tr('bidAmountLabel')} (${widget.currency})',
                 border: const OutlineInputBorder(),
               ),
               validator: (value) {
-                if (value == null || value.trim().isEmpty) return 'Enter amount';
+                if (value == null || value.trim().isEmpty) {
+                  return localizations.tr('enterAmount');
+                }
                 final num? parsed = num.tryParse(value.replaceAll(',', '').trim());
-                if (parsed == null || parsed <= 0) return 'Enter a valid amount';
+                if (parsed == null || parsed <= 0) {
+                  return localizations.tr('enterValidAmount');
+                }
                 return null;
               },
               onChanged: (_) => setState(() {}),
@@ -213,10 +223,11 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Estimated platform fee (5%): ${_estimatedFee.toStringAsFixed(2)} ${widget.currency}'),
+                  Text(
+                      '${localizations.tr('estimatedPlatformFee')}: ${_estimatedFee.toStringAsFixed(2)} ${widget.currency}'),
                   const SizedBox(height: 4),
                   Text(
-                    'Estimated net payout: ${_estimatedNet.toStringAsFixed(2)} ${widget.currency}',
+                    '${localizations.tr('estimatedNetPayout')}: ${_estimatedNet.toStringAsFixed(2)} ${widget.currency}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -225,9 +236,9 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes (optional)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: localizations.tr('notesOptional'),
+                border: const OutlineInputBorder(),
               ),
               minLines: 1,
               maxLines: 3,
@@ -243,7 +254,9 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : Text(_existingBidId == null ? 'Place Bid' : 'Update Bid'),
+                    : Text(_existingBidId == null
+                        ? localizations.tr('placeBid')
+                        : localizations.tr('updateBid')),
               ),
             ),
           ],

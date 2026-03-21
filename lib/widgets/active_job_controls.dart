@@ -3,10 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:Kora/screens/track_driver_map_screen.dart';
-import 'package:Kora/screens/shipment_chat_screen.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/screens/track_driver_map_screen.dart';
+import 'package:kora/screens/shipment_chat_screen.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/app_localizations.dart';
 
 Future<Map<String, dynamic>> _authedRequest({
   required String path,
@@ -66,6 +67,7 @@ class ActiveJobControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       color: Colors.blue[50],
@@ -87,14 +89,16 @@ class ActiveJobControls extends StatelessWidget {
                 );
               },
               icon: const Icon(Icons.location_on),
-              label: const Text('Track Driver'),
+              label: Text(localizations.tr('trackDriver')),
             ),
           ElevatedButton.icon(
             onPressed: () {
               _launchMessage(context, isShipper ? carrierId : ownerId);
             },
             icon: const Icon(Icons.message),
-            label: Text(isShipper ? 'Message Carrier' : 'Message Shipper'),
+            label: Text(isShipper
+                ? localizations.tr('messageCarrier')
+                : localizations.tr('messageShipper')),
           ),
           ElevatedButton.icon(
             onPressed: () {
@@ -104,20 +108,24 @@ class ActiveJobControls extends StatelessWidget {
                   builder: (_) => ShipmentChatScreen(
                     threadId: threadId,
                     peerId: isShipper ? carrierId : ownerId,
-                    peerLabel: isShipper ? 'Carrier' : 'Shipper',
+                    peerLabel: isShipper
+                        ? AppLocalizations.of(context).tr('driverLabel')
+                        : AppLocalizations.of(context).tr('cargoLabel'),
                   ),
                 ),
               );
             },
             icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('In-App Chat'),
+            label: Text(localizations.tr('inAppChat')),
           ),
           ElevatedButton.icon(
             onPressed: () {
               _launchCall(context, isShipper ? driverId : ownerId);
             },
             icon: const Icon(Icons.call),
-            label: Text(isShipper ? 'Call Driver' : 'Call Shipper'),
+            label: Text(isShipper
+                ? localizations.tr('callDriver')
+                : localizations.tr('callShipper')),
           ),
           if (isShipper)
             ElevatedButton.icon(
@@ -125,12 +133,12 @@ class ActiveJobControls extends StatelessWidget {
                   ? () => _completeDeliveryWithProof(context)
                   : null,
               icon: const Icon(Icons.task_alt),
-              label: const Text('Mark Delivered'),
+              label: Text(localizations.tr('markDelivered')),
             ),
           OutlinedButton.icon(
             onPressed: () => _reportIssue(context),
             icon: const Icon(Icons.report_problem_outlined),
-            label: const Text('Report Issue'),
+            label: Text(localizations.tr('reportIssue')),
           ),
         ],
       ),
@@ -149,8 +157,11 @@ class ActiveJobControls extends StatelessWidget {
 
   Future<void> _completeDeliveryWithProof(BuildContext context) async {
     if (bidId.isEmpty) {
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot complete delivery: missing accepted bid reference.')),
+        SnackBar(
+            content:
+                Text(localizations.tr('cannotCompleteDeliveryMissingBid'))),
       );
       return;
     }
@@ -180,8 +191,11 @@ class ActiveJobControls extends StatelessWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to complete delivery: $e')),
+        SnackBar(
+            content: Text(
+                '${localizations.tr('failedCompleteDelivery')}$e')),
       );
     }
   }
@@ -208,13 +222,15 @@ class ActiveJobControls extends StatelessWidget {
       );
 
       if (!context.mounted) return;
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Issue reported. Support can now review this load.')),
+        SnackBar(content: Text(localizations.tr('issueReported'))),
       );
     } catch (e) {
       if (!context.mounted) return;
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to report issue: $e')),
+        SnackBar(content: Text('${localizations.tr('failedReportIssue')}$e')),
       );
     }
   }
@@ -228,34 +244,88 @@ class ActiveJobControls extends StatelessWidget {
 
   Future<void> _launchMessage(BuildContext context, String userId) async {
     final phone = await _getPhoneNumber(userId);
+    if (!context.mounted) return;
     if (phone == null || phone.isEmpty) {
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No phone number available for messaging.')),
+        SnackBar(content: Text(localizations.tr('noPhoneForMessaging'))),
       );
       return;
     }
+    final localizations = AppLocalizations.of(context);
+    final proceed = await _confirmAction(
+      context,
+      title: localizations.tr('confirmMessageTitle'),
+      body:
+          '${localizations.tr('confirmMessageBody')} $phone',
+    );
+    if (!context.mounted) return;
+    if (!proceed) return;
     final uri = Uri(scheme: 'sms', path: phone);
-    if (!await launchUrl(uri)) {
+    final launched = await launchUrl(uri);
+    if (!context.mounted) return;
+    if (!launched) {
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open the messaging app.')),
+        SnackBar(content: Text(localizations.tr('unableOpenMessaging'))),
       );
     }
   }
 
   Future<void> _launchCall(BuildContext context, String userId) async {
     final phone = await _getPhoneNumber(userId);
+    if (!context.mounted) return;
     if (phone == null || phone.isEmpty) {
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No phone number available for calling.')),
+        SnackBar(content: Text(localizations.tr('noPhoneForCalling'))),
       );
       return;
     }
+    final localizations = AppLocalizations.of(context);
+    final proceed = await _confirmAction(
+      context,
+      title: localizations.tr('confirmCallTitle'),
+      body:
+          '${localizations.tr('confirmCallBody')} $phone',
+    );
+    if (!context.mounted) return;
+    if (!proceed) return;
     final uri = Uri(scheme: 'tel', path: phone);
-    if (!await launchUrl(uri)) {
+    final launched = await launchUrl(uri);
+    if (!context.mounted) return;
+    if (!launched) {
+      final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open the phone dialer.')),
+        SnackBar(content: Text(localizations.tr('unableOpenDialer'))),
       );
     }
+  }
+
+  Future<bool> _confirmAction(
+    BuildContext context, {
+    required String title,
+    required String body,
+  }) async {
+    final localizations = AppLocalizations.of(context);
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(localizations.tr('cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(localizations.tr('continue')),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 }
 
@@ -286,12 +356,13 @@ class _RatingDialogState extends State<RatingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Rate the Driver'),
+      title: Text(localizations.tr('rateDriver')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Please rate your experience with the driver.'),
+          Text(localizations.tr('rateDriverPrompt')),
           Slider(
             value: _rating,
             min: 1,
@@ -306,8 +377,8 @@ class _RatingDialogState extends State<RatingDialog> {
           ),
           TextField(
             controller: _commentController,
-            decoration: const InputDecoration(
-              labelText: 'Optional feedback',
+            decoration: InputDecoration(
+              labelText: localizations.tr('optionalFeedback'),
             ),
             maxLines: 3,
           ),
@@ -318,13 +389,13 @@ class _RatingDialogState extends State<RatingDialog> {
           onPressed: () {
             _submitRating(context);
           },
-          child: const Text('Submit'),
+          child: Text(localizations.tr('submit')),
         ),
         TextButton(
           onPressed: () {
             Navigator.of(context).pop();
           },
-          child: const Text('Cancel'),
+          child: Text(localizations.tr('cancel')),
         ),
       ],
     );
@@ -342,18 +413,18 @@ class _RatingDialogState extends State<RatingDialog> {
         },
       );
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thanks for your feedback!')),
-        );
-      }
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      final localizations = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localizations.tr('thanksFeedback'))),
+      );
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to submit rating. Please try again.')),
-        );
-      }
+      if (!context.mounted) return;
+      final localizations = AppLocalizations.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localizations.tr('failedSubmitRating'))),
+      );
     }
   }
 }
@@ -391,25 +462,26 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Proof of Delivery'),
+      title: Text(localizations.tr('proofOfDelivery')),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _receiverController,
-              decoration: const InputDecoration(
-                labelText: 'Receiver name',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: localizations.tr('receiverName'),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Delivery notes',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: localizations.tr('deliveryNotes'),
+                border: const OutlineInputBorder(),
               ),
               minLines: 2,
               maxLines: 4,
@@ -417,9 +489,9 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
             const SizedBox(height: 10),
             TextField(
               controller: _photoController,
-              decoration: const InputDecoration(
-                labelText: 'Photo URL (optional)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: localizations.tr('photoUrlOptional'),
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -428,7 +500,7 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(localizations.tr('cancel')),
         ),
         ElevatedButton(
           onPressed: () {
@@ -436,7 +508,7 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
             final notes = _notesController.text.trim();
             if (receiver.isEmpty || notes.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Receiver name and delivery notes are required.')),
+                SnackBar(content: Text(localizations.tr('receiverAndNotesRequired'))),
               );
               return;
             }
@@ -448,7 +520,7 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
               ),
             );
           },
-          child: const Text('Complete Delivery'),
+          child: Text(localizations.tr('completeDelivery')),
         ),
       ],
     );
@@ -480,23 +552,24 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Report Shipment Issue'),
+      title: Text(localizations.tr('reportShipmentIssue')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<String>(
             value: _category,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Issue category',
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: localizations.tr('issueCategory'),
             ),
-            items: const [
-              DropdownMenuItem(value: 'Delay', child: Text('Delay')),
-              DropdownMenuItem(value: 'Damaged goods', child: Text('Damaged goods')),
-              DropdownMenuItem(value: 'Communication', child: Text('Communication')),
-              DropdownMenuItem(value: 'Payment', child: Text('Payment')),
-              DropdownMenuItem(value: 'Other', child: Text('Other')),
+            items: [
+              DropdownMenuItem(value: 'Delay', child: Text(localizations.tr('delay'))),
+              DropdownMenuItem(value: 'Damaged goods', child: Text(localizations.tr('damagedGoods'))),
+              DropdownMenuItem(value: 'Communication', child: Text(localizations.tr('communicationIssue'))),
+              DropdownMenuItem(value: 'Payment', child: Text(localizations.tr('paymentIssue'))),
+              DropdownMenuItem(value: 'Other', child: Text(localizations.tr('otherIssue'))),
             ],
             onChanged: (value) {
               if (value != null) setState(() => _category = value);
@@ -505,9 +578,9 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
           const SizedBox(height: 10),
           TextField(
             controller: _detailsController,
-            decoration: const InputDecoration(
-              labelText: 'What happened?',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: localizations.tr('issueDetailsPrompt'),
+              border: const OutlineInputBorder(),
             ),
             minLines: 3,
             maxLines: 5,
@@ -515,19 +588,21 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(localizations.tr('cancel'))),
         ElevatedButton(
           onPressed: () {
             final details = _detailsController.text.trim();
             if (details.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Please add issue details.')),
+                SnackBar(content: Text(localizations.tr('pleaseAddIssueDetails'))),
               );
               return;
             }
             Navigator.of(context).pop(_IssueData(category: _category, details: details));
           },
-          child: const Text('Submit'),
+          child: Text(localizations.tr('submit')),
         ),
       ],
     );

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/app_localizations.dart';
 
 class DriverLocationSnapshot {
   final LatLng? location;
@@ -18,9 +18,7 @@ class DriverLocationSnapshot {
 class TrackDriverMapScreen extends StatefulWidget {
   final String driverId;
   final String loadId;
-  const TrackDriverMapScreen(
-      {Key? key, required this.driverId, required this.loadId})
-      : super(key: key);
+  const TrackDriverMapScreen({super.key, required this.driverId, required this.loadId});
 
   @override
   State<TrackDriverMapScreen> createState() => _TrackDriverMapScreenState();
@@ -144,6 +142,7 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
@@ -153,7 +152,7 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Track Driver'),
+        title: Text(localizations.tr('trackDriver')),
       ),
       body: Builder(
         builder: (context) {
@@ -165,7 +164,7 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
-                child: Text('Unable to load live location right now. $_error'),
+                child: Text('${localizations.tr('liveLocationError')} $_error'),
               ),
             );
           }
@@ -201,8 +200,8 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
                   FlutterMap(
                     mapController: _mapController,
                     options: MapOptions(
-                      center: driverLocation,
-                      zoom: 13.0,
+                      initialCenter: driverLocation,
+                      initialZoom: 13.0,
                     ),
                     children: [
                       TileLayer(
@@ -308,3 +307,4 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
     );
   }
 }
+

@@ -38,3 +38,4 @@ class AgreedPriceBanner extends StatelessWidget {
     );
   }
 }
+

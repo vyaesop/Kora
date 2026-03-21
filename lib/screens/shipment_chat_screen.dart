@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_config.dart';
+import '../utils/error_handler.dart';
+import '../app_localizations.dart';
 
 class ShipmentChatScreen extends StatefulWidget {
   final String threadId;
@@ -63,7 +65,7 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
   String? _error;
   String? _currentUserId;
   List<_ChatMessage> _messages = const [];
-  Timer? _pollTimer;
+  // Timer? _pollTimer; // Removed to save battery
 
   @override
   void initState() {
@@ -73,7 +75,6 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
     _messageController.dispose();
     super.dispose();
   }
@@ -95,10 +96,6 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
     });
 
     await _loadMessages(showLoader: true);
-
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _loadMessages(showLoader: false);
-    });
   }
 
   Future<Map<String, dynamic>> _authedRequest({
@@ -164,7 +161,7 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = e.toString();
+        _error = ErrorHandler.getMessage(e);
       });
     }
   }
@@ -192,7 +189,9 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: $e')),
+          SnackBar(
+              content: Text(
+                  '${AppLocalizations.of(context).tr('failedToSendMessage')}: ${ErrorHandler.getMessage(e)}')),
         );
       }
     } finally {
@@ -202,25 +201,37 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        title: Text('Chat • ${widget.peerLabel}'),
+        title: Text('${localizations.tr('chat')} • ${widget.peerLabel}'),
       ),
       body: Column(
         children: [
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : _messages.isEmpty
-                        ? const Center(
-                            child: Text('No messages yet. Start the conversation.'),
-                          )
-                        : ListView.builder(
+            child: RefreshIndicator(
+              onRefresh: () => _loadMessages(showLoader: false),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? ListView(
+                          children: [
+                            SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                            Center(child: Text(_error!)),
+                          ],
+                        )
+                      : _messages.isEmpty
+                          ? ListView(
+                              children: [
+                                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                                Center(child: Text(localizations.tr('noMessagesYet'))),
+                              ],
+                            )
+                          : ListView.builder(
+                              physics: const AlwaysScrollableScrollPhysics(),
                             reverse: true,
                             padding: const EdgeInsets.all(12),
                             itemCount: _messages.length,
@@ -254,6 +265,7 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
                               );
                             },
                           ),
+            ),
           ),
           SafeArea(
             top: false,
@@ -266,9 +278,9 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
                       controller: _messageController,
                       minLines: 1,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Type message...',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        hintText: localizations.tr('typeMessage'),
+                        border: const OutlineInputBorder(),
                       ),
                     ),
                   ),
@@ -281,7 +293,7 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Send'),
+                        : Text(localizations.tr('send')),
                   ),
                 ],
               ),
@@ -292,3 +304,4 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
     );
   }
 }
+

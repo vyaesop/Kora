@@ -2,18 +2,21 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:Kora/model/user.dart';
-import 'package:Kora/utils/delivery_status.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
-import '../widgets/Language_Switcher.dart';
+import 'package:kora/model/user.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/app_theme.dart';
+import '../widgets/language_switcher.dart';
+import '../app_localizations.dart';
 
-class PreFeedCargoScreen extends StatelessWidget {
+class PreFeedCargoScreen extends StatefulWidget {
   final UserModel user;
   final VoidCallback onContinueToFeed;
   final VoidCallback onPostLoad;
   final VoidCallback onOpenProfile;
   final void Function(int index) onSelectTab;
+  final bool embedded;
 
   const PreFeedCargoScreen({
     super.key,
@@ -22,111 +25,186 @@ class PreFeedCargoScreen extends StatelessWidget {
     required this.onPostLoad,
     required this.onOpenProfile,
     required this.onSelectTab,
+    this.embedded = false,
   });
 
   @override
-  Widget build(BuildContext context) {
-    Future<Map<String, dynamic>> authedRequest(String path) async {
-      final token = await BackendAuthService().getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Not signed in');
-      }
+  State<PreFeedCargoScreen> createState() => _PreFeedCargoScreenState();
+}
 
-      final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-      final client = HttpClient();
-      try {
-        final req = await client.getUrl(uri);
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-        final res = await req.close();
-        final raw = await utf8.decoder.bind(res).join();
-        final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-        if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-          throw Exception((data['error'] ?? 'Request failed').toString());
-        }
-        return data;
-      } finally {
-        client.close(force: true);
-      }
+class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
+  late Future<List<Map<String, dynamic>>> _loadsFuture;
+  late Future<List<Map<String, dynamic>>> _driversFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadsFuture = _fetchLoads();
+    _driversFuture = _fetchDrivers();
+  }
+
+  Future<Map<String, dynamic>> _authedRequest(String path) async {
+    final token = await BackendAuthService().getToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Not signed in');
     }
 
-    final loadsFuture = authedRequest('/api/threads').then((data) {
-      final threads = (data['threads'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .where((thread) => (thread['ownerId'] ?? '').toString() == user.id)
-          .take(3)
-          .toList();
-      return threads;
-    });
+    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
+    final client = HttpClient();
+    try {
+      final req = await client.getUrl(uri);
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      final res = await req.close();
+      final raw = await utf8.decoder.bind(res).join();
+      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
+      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
+        throw Exception((data['error'] ?? 'Request failed').toString());
+      }
+      return data;
+    } finally {
+      client.close(force: true);
+    }
+  }
 
-    final driversFuture = authedRequest('/api/users?userType=Driver&limit=2').then((data) {
-      return (data['users'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .toList();
-    });
+  Future<List<Map<String, dynamic>>> _fetchLoads() async {
+    final data = await _authedRequest('/api/threads');
+    return (data['threads'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .where((thread) => (thread['ownerId'] ?? '').toString() == widget.user.id)
+        .take(3)
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchDrivers() async {
+    final data = await _authedRequest('/api/users?userType=Driver&limit=2');
+    return (data['users'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 245, 245, 247),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        automaticallyImplyLeading: false,
-        title: Text('Welcome, ${user.name}'),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: LanguageSwitcher(),
-          )
-        ],
-      ),
+      backgroundColor: AppPalette.surface,
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              elevation: 0,
+              backgroundColor: AppPalette.card,
+              foregroundColor: AppPalette.ink,
+              automaticallyImplyLeading: false,
+              title: Text('${localizations.tr('welcome')}, ${widget.user.name}'),
+              actions: const [
+                Padding(
+                  padding: EdgeInsets.only(right: 12),
+                  child: LanguageSwitcher(),
+                )
+              ],
+            ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.embedded) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${localizations.tr('welcome')}, ${widget.user.name}',
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.w700),
+                    ),
+                    const LanguageSwitcher(),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppPalette.card,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'Cargo Control Center',
-                      style:
-                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                      localizations.tr('cargoControlTitle'),
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w700),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
-                      'Post loads, review recent activity, and move quickly to tracking and profile actions.',
-                      style: TextStyle(color: Colors.black54),
+                      localizations.tr('cargoControlSubtitle'),
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: AppPalette.heroGradient,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      localizations.tr('feedTitle'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      localizations.tr('feedSubtitle'),
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ElevatedButton.icon(
+                        onPressed: widget.onContinueToFeed,
+                        icon: const Icon(Icons.rss_feed),
+                        label: Text(localizations.tr('continueToFeed')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: AppPalette.ink,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
               _SectionHeader(
-                title: 'Quick Actions',
-                actionText: 'Go to Feed',
-                onAction: onContinueToFeed,
+                title: localizations.tr('quickActions'),
+                actionText: localizations.tr('continueToFeed'),
+                onAction: widget.onContinueToFeed,
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Post a new load or review your recent loads and bids.',
-                style: TextStyle(color: Colors.black54),
+              Text(
+                localizations.tr('cargoQuickActionsHint'),
+                style: const TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: onPostLoad,
+                      onPressed: widget.onPostLoad,
                       icon: const Icon(Icons.add),
-                      label: const Text('Post a Load'),
+                      label: Text(localizations.tr('postALoad')),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -135,9 +213,9 @@ class PreFeedCargoScreen extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: onOpenProfile,
+                      onPressed: widget.onOpenProfile,
                       icon: const Icon(Icons.person_outline),
-                      label: const Text('Profile'),
+                      label: Text(localizations.tr('profile')),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
@@ -146,10 +224,10 @@ class PreFeedCargoScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              _SectionHeader(title: 'Recent Loads'),
+              _SectionHeader(title: localizations.tr('recentLoads')),
               const SizedBox(height: 8),
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: loadsFuture,
+                future: _loadsFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const _LoadingList();
@@ -157,11 +235,10 @@ class PreFeedCargoScreen extends StatelessWidget {
                   final docs = snapshot.data ?? const <Map<String, dynamic>>[];
                   if (docs.isEmpty) {
                     return _EmptyState(
-                      title: 'No loads yet',
-                      subtitle:
-                          'Post your first load to get bids from drivers.',
-                      buttonText: 'Create Load',
-                      onTap: onPostLoad,
+                      title: localizations.tr('noLoadsYet'),
+                      subtitle: localizations.tr('postFirstLoadHint'),
+                      buttonText: localizations.tr('postALoad'),
+                      onTap: widget.onPostLoad,
                     );
                   }
                   return ListView.separated(
@@ -177,8 +254,9 @@ class PreFeedCargoScreen extends StatelessWidget {
                       final unit = data['weightUnit'] ?? '';
                       final status = data['deliveryStatus'] ?? 'pending_bids';
                       return _InfoCard(
-                        title: '$start → $end',
-                        subtitle: 'Weight: $weight $unit',
+                        title: '$start -> $end',
+                        subtitle:
+                            '${localizations.tr('weight')}: $weight $unit',
                         trailing: _StatusChip(status: status.toString()),
                       );
                     },
@@ -186,20 +264,19 @@ class PreFeedCargoScreen extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 20),
-              _SectionHeader(title: 'Suggested Drivers'),
+              _SectionHeader(title: localizations.tr('suggestedDrivers')),
               const SizedBox(height: 8),
               FutureBuilder<List<Map<String, dynamic>>>(
-                future: driversFuture,
+                future: _driversFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const _LoadingList();
                   }
                   final docs = snapshot.data ?? const <Map<String, dynamic>>[];
                   if (docs.isEmpty) {
-                    return const _EmptyState(
-                      title: 'No suggestions yet',
-                      subtitle:
-                          'We will recommend top drivers based on your routes.',
+                    return _EmptyState(
+                      title: localizations.tr('noSuggestionsYet'),
+                      subtitle: localizations.tr('suggestedDriversHint'),
                     );
                   }
                   return ListView.separated(
@@ -213,7 +290,7 @@ class PreFeedCargoScreen extends StatelessWidget {
                       final rating = data['ratingAverage'];
                       return _InfoCard(
                         title: name.toString(),
-                        subtitle: 'Tap feed to invite for bids',
+                        subtitle: localizations.tr('tapFeedToInvite'),
                         trailing: rating == null
                             ? const SizedBox.shrink()
                             : _RatingChip(rating: rating),
@@ -225,39 +302,49 @@ class PreFeedCargoScreen extends StatelessWidget {
               const SizedBox(height: 24),
               Center(
                 child: TextButton(
-                  onPressed: onContinueToFeed,
-                  child: const Text('Continue to Feed'),
+                  onPressed: widget.onContinueToFeed,
+                  child: Text(localizations.tr('continueToFeed')),
                 ),
               )
             ],
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: const Color(0xFF000000),
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.preview), label: 'Pre-feed'),
-          BottomNavigationBarItem(icon: Icon(Icons.rss_feed), label: 'Feed'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle_outline), label: 'Post'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.location_on), label: 'Track'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-        onTap: (index) {
-          if (index == 0) return;
-          if (index == 2) {
-            onPostLoad();
-            return;
-          }
-          onSelectTab(index);
-        },
-      ),
+      bottomNavigationBar: widget.embedded
+          ? null
+          : BottomNavigationBar(
+              currentIndex: 0,
+              selectedItemColor: const Color(0xFF000000),
+              unselectedItemColor: Colors.grey,
+              showSelectedLabels: true,
+              showUnselectedLabels: true,
+              type: BottomNavigationBarType.fixed,
+              items: [
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.preview),
+                    label: localizations.tr('home')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.rss_feed),
+                    label: localizations.tr('feed')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: localizations.tr('post')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.location_on),
+                    label: localizations.tr('track')),
+                BottomNavigationBarItem(
+                    icon: const Icon(Icons.person),
+                    label: localizations.tr('profile')),
+              ],
+              onTap: (index) {
+                if (index == 0) return;
+                if (index == 2) {
+                  widget.onPostLoad();
+                  return;
+                }
+                widget.onSelectTab(index);
+              },
+            ),
     );
   }
 }
@@ -334,7 +421,7 @@ class _RatingChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      label: Text('★ $rating', style: const TextStyle(fontSize: 12)),
+      label: Text('* $rating', style: const TextStyle(fontSize: 12)),
     );
   }
 }
@@ -344,8 +431,8 @@ class _LoadingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: const [
+    return const Column(
+      children: [
         LinearProgressIndicator(minHeight: 2),
         SizedBox(height: 10),
       ],
@@ -390,3 +477,4 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+

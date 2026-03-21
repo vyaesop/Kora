@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:Kora/utils/firestore_service.dart';
-import 'package:Kora/app_localizations.dart';
-import 'package:Kora/utils/backend_auth_service.dart';
-import 'package:Kora/utils/backend_config.dart';
+import 'package:kora/utils/firestore_service.dart';
+import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_config.dart';
 
 class DriverLoadsScreen extends StatelessWidget {
   final String driverId;
-  const DriverLoadsScreen({Key? key, required this.driverId}) : super(key: key);
+  const DriverLoadsScreen({super.key, required this.driverId});
 
   Future<List<Map<String, dynamic>>> _fetchOpenLoads() async {
     final token = await BackendAuthService().getToken();
@@ -69,7 +69,8 @@ class DriverLoadsScreen extends StatelessWidget {
             itemCount: loads.length,
             itemBuilder: (context, index) {
               final load = loads[index];
-              return _buildLoadCard(context, (load['id'] ?? '').toString(), load);
+              return _buildLoadCard(
+                  context, (load['id'] ?? '').toString(), load, localizations);
             },
           );
         },
@@ -77,8 +78,8 @@ class DriverLoadsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadCard(
-      BuildContext context, String threadId, Map<String, dynamic> load) {
+  Widget _buildLoadCard(BuildContext context, String threadId,
+      Map<String, dynamic> load, AppLocalizations localizations) {
     final title =
         (load['description'] ?? load['message'] ?? '').toString().trim();
     final start = (load['start'] ??
@@ -96,17 +97,18 @@ class DriverLoadsScreen extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: ListTile(
-        title: Text(title.isEmpty ? 'Available Load' : title),
-        subtitle: Text('From: $start → To: $end\n$bidsCount bids so far'),
+        title: Text(title.isEmpty ? localizations.tr('availableLoad') : title),
+        subtitle: Text(
+            '${localizations.tr('from')}: $start\n${localizations.tr('to')}: $end\n$bidsCount ${localizations.tr('bidsSoFar')}'),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Open',
+            Text(localizations.tr('openStatus'),
                 style:
-                    TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                    const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
             ElevatedButton(
-              onPressed: () => _showBidDialog(context, threadId),
-              child: const Text('Bid'),
+              onPressed: () => _showBidDialog(context, threadId, localizations),
+              child: Text(localizations.tr('bid')),
             ),
           ],
         ),
@@ -115,28 +117,29 @@ class DriverLoadsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showBidDialog(BuildContext context, String threadId) async {
+  Future<void> _showBidDialog(BuildContext context, String threadId,
+      AppLocalizations localizations) async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Place Bid'),
+        title: Text(localizations.tr('placeBid')),
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            hintText: 'Enter bid amount (Birr)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: '${localizations.tr('enterBidAmount')} (Birr)',
+            border: const OutlineInputBorder(),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: Text(localizations.tr('cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Submit'),
+            child: Text(localizations.tr('submit')),
           ),
         ],
       ),
@@ -147,7 +150,7 @@ class DriverLoadsScreen extends StatelessWidget {
     if (amount == null || amount <= 0) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid positive bid amount.')),
+          SnackBar(content: Text(localizations.tr('enterValidAmount'))),
         );
       }
       return;
@@ -171,7 +174,7 @@ class DriverLoadsScreen extends StatelessWidget {
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bid submitted.')),
+        SnackBar(content: Text(localizations.tr('bidSubmitted'))),
       );
     }
   }
@@ -180,8 +183,7 @@ class DriverLoadsScreen extends StatelessWidget {
 class BidButton extends StatefulWidget {
   final String threadId;
   final String driverId;
-  const BidButton({Key? key, required this.threadId, required this.driverId})
-      : super(key: key);
+  const BidButton({super.key, required this.threadId, required this.driverId});
 
   @override
   State<BidButton> createState() => _BidButtonState();
@@ -199,6 +201,7 @@ class _BidButtonState extends State<BidButton> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -207,7 +210,8 @@ class _BidButtonState extends State<BidButton> {
           child: TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Your Bid'),
+            decoration:
+                InputDecoration(labelText: localizations.tr('yourBid')),
           ),
         ),
         const SizedBox(height: 8),
@@ -221,9 +225,9 @@ class _BidButtonState extends State<BidButton> {
                   if (amount == null || amount <= 0) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                             content:
-                                Text('Enter a valid positive bid amount.')),
+                                Text(localizations.tr('enterValidAmount'))),
                       );
                     }
                     setState(() => _loading = false);
@@ -239,9 +243,10 @@ class _BidButtonState extends State<BidButton> {
                 },
           child: _loading
               ? const CircularProgressIndicator()
-              : const Text('Submit Bid'),
+              : Text(localizations.tr('submitBid')),
         ),
       ],
     );
   }
 }
+
