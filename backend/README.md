@@ -1,56 +1,72 @@
-# Kora Backend (Neon Postgres)
+# Kora Backend
 
-This backend replaces Firebase admin/data flows with a Node + Express + Prisma API using Neon PostgreSQL.
+Node + Express + Prisma API for the Kora app.
 
-## Setup
+## Local setup
 
 1. Install dependencies:
    - `npm install`
-2. Create environment file:
+2. Create an env file:
    - `copy .env.example .env`
-3. Configure `.env`:
-   - `DATABASE_URL` (Neon connection string)
-   - `JWT_SECRET` (strong random secret)
-   - `SUPER_ADMIN_EMAIL` (bootstrap super admin user email)
-   - `CORS_ORIGINS` (comma-separated allowed origins, use `*` only for local testing)
-   - `PORT` (optional, default `3000`)
+3. Fill in the required values:
+   - `DATABASE_URL`
+   - `JWT_SECRET`
+   - `SUPER_ADMIN_EMAIL`
+   - `CORS_ORIGINS`
 4. Generate Prisma client and push schema:
    - `npm run prisma:generate`
    - `npm run prisma:push`
+5. Start locally:
+   - `npm run dev`
 
-## Run
+## Vercel deployment
 
-- Development: `npm run dev`
-- Build: `npm run build`
-- Production: `npm run start`
+This backend is now compatible with Vercel's Express deployment model:
 
-## Connectivity troubleshooting
+- `src/index.ts` exports the Express app for Vercel
+- local `npm run dev` still starts a normal server
+- Prisma client generation runs during install via `postinstall`
+- `vercel.json` sets a 30 second function duration for the backend entrypoint
 
-- If Prisma returns `P1001` (`Can't reach database server`), verify the Neon project is active and your database/password are still valid.
-- If your Neon credentials were shared publicly, rotate them immediately and update `DATABASE_URL`.
-- Confirm outbound access to `*.neon.tech:5432` is allowed from your runtime environment.
+Important:
 
-## API Summary
+- Vercel Functions do not provide a persistent WebSocket server, so the existing Socket.IO hooks are disabled automatically on Vercel
+- the REST API continues to work normally on Vercel
 
-- `GET /health`
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `GET /api/threads`
-- `POST /api/threads`
+## Required Vercel environment variables
 
-Admin endpoints (JWT + admin role required):
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `SUPER_ADMIN_EMAIL`
+- `CORS_ORIGINS`
+
+Optional but recommended:
+
+- `APP_BASE_URL` (your public app URL that serves `/reset-password`)
+- `APP_DEEPLINK_SCHEME`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+## First production deploy checklist
+
+1. Deploy the backend project from the `backend` root directory in Vercel
+2. Add the environment variables in Project Settings -> Environment Variables
+3. Redeploy after adding env vars
+4. Run `npx prisma db push` against your production database from your machine or CI once
+5. Test:
+   - `GET /health`
+   - `POST /api/auth/login`
+   - `GET /api/auth/me`
+
+## Admin API
+
+Admin endpoints require a JWT for an admin user:
 
 - `GET /api/admin/users/pending-verification`
 - `PATCH /api/admin/users/:userId/verification`
 - `GET /api/admin/disputes?status=open`
 - `PATCH /api/admin/threads/:threadId/disputes/:disputeId`
-- `PATCH /api/admin/admins/:targetUid/claim` (super admin only)
-
-## Admin Console
-
-`admin-console/app.js` is now JWT-based and no longer depends on Firebase SDK.
-
-- Set `API base` to backend URL (for example `http://localhost:3000`).
-- Login uses `POST /api/auth/login`.
-- Admin actions call `/api/admin/*` endpoints.
+- `PATCH /api/admin/admins/:targetUid/claim`

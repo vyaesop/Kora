@@ -1,58 +1,42 @@
-# Kora Admin Console (Postgres + Neon)
+# Kora Admin Console
 
-This is a minimal Vercel-ready static admin UI that calls the custom Node backend (`backend`) using JWT auth.
+Static admin UI for moderation and verification flows.
 
-## 1) Start backend + admin UI together (one command)
-From project root:
+## Local use
+
+From the repo root:
+
 - `npm install`
 - `npm run dev:admin`
 
 This starts:
+
 - backend API at `http://localhost:3000`
 - admin UI at `http://localhost:4173`
 
-## 2) Backend first-time setup (one time)
-From project root:
-- `cd backend`
-- `npm install`
-- `copy .env.example .env`
-- set real values in `.env` (`DATABASE_URL`, `JWT_SECRET`, `SUPER_ADMIN_EMAIL`)
-- `npm run prisma:generate`
-- `npm run prisma:push`
+## Vercel deployment
 
-## 3) Bootstrap admin access
-Use the email configured as `SUPER_ADMIN_EMAIL` in `.env`, then sign in once through the admin console.
-On first login, this user is promoted to super admin automatically.
+Deploy `admin-console` as its own Vercel project.
 
-## 4) Deploy admin UI on Vercel
-Option A: Deploy `admin-console` directory as its own Vercel project.
-Option B: Import repo and set root directory to `admin-console`.
+The admin project now has a tiny build step that generates `dist/config.js` from the `KORA_ADMIN_API_BASE_URL` environment variable. That means the deployed admin can already know which backend URL to use.
 
-## 5) Runtime setup in UI
-In the admin page:
-- Sign in with backend credentials (`/api/auth/login`).
-- Set API base URL to backend host, for example:
-  - `http://localhost:3000`
-  - `https://your-backend-domain.com`
+### Required Vercel settings
 
-The app supports:
-- View pending verifications
-- Approve/reject users
-- View open disputes
-- Mark disputes in-review/resolved
-- Grant/revoke admin and super-admin claims
+- Root Directory: `admin-console`
+- Build Command: `npm run build`
+- Output Directory: `dist`
 
-## API Routes (backend)
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `GET /api/admin/users/pending-verification`
-- `PATCH /api/admin/users/{uid}/verification`
-- `GET /api/admin/disputes?status=open`
-- `PATCH /api/admin/threads/{threadId}/disputes/{disputeId}`
-- `PATCH /api/admin/admins/{uid}/claim`
+### Recommended environment variable
 
-## Security Notes
-- Rotate the exposed Neon password and JWT secret before production.
-- Only super admins should grant/revoke claims.
-- Keep backend CORS restricted to your app domains in production.
+- `KORA_ADMIN_API_BASE_URL=https://your-backend-project.vercel.app`
+
+If this variable is empty, the admin still works and lets you enter the API base manually in the browser.
+
+## What the admin can do
+
+- Sign in with backend credentials
+- Review pending verifications
+- Approve or reject users
+- Review open disputes
+- Move disputes to `in_review` or `resolved`
+- Grant or revoke admin and super admin claims

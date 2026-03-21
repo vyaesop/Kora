@@ -19,7 +19,13 @@ const targetAdminInput = document.getElementById('targetAdmin');
 const targetSuperAdminInput = document.getElementById('targetSuperAdmin');
 const setClaimBtn = document.getElementById('setClaimBtn');
 
-const defaultApiBase = 'http://localhost:3000';
+const injectedApiBase =
+  typeof window !== 'undefined' &&
+  window.KORA_ADMIN_CONFIG &&
+  typeof window.KORA_ADMIN_CONFIG.apiBase === 'string'
+    ? window.KORA_ADMIN_CONFIG.apiBase.trim()
+    : '';
+const defaultApiBase = injectedApiBase || 'http://localhost:3000';
 apiBaseInput.value = localStorage.getItem(apiBaseStorageKey) || defaultApiBase;
 
 let authToken = localStorage.getItem(tokenStorageKey) || '';

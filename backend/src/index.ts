@@ -21,13 +21,17 @@ type AuthedRequest = Request & {
 };
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
-  },
-});
+// Vercel Functions can serve the Express app, but they cannot host a persistent Socket.IO server.
+const isVercelRuntime = process.env.VERCEL === '1';
+const httpServer = isVercelRuntime ? null : createServer(app);
+const io = httpServer
+  ? new Server(httpServer, {
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+      },
+    })
+  : null;
 
 const prisma = new PrismaClient();
 const driverLocationStore = new Map<
@@ -53,6 +57,14 @@ const corsOrigins = (process.env.CORS_ORIGINS || '*')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+
+const emitRealtime = (room: string, event: string, payload: unknown) => {
+  io?.to(room).emit(event, payload);
+};
+
+const broadcastRealtime = (event: string, payload: unknown) => {
+  io?.emit(event, payload);
+};
 
 app.use(
   cors({
@@ -661,7 +673,7 @@ app.put('/api/drivers/:driverId/location', requireAuth, async (req: AuthedReques
       },
     });
 
-    io.to(`tracking_${driverId}`).emit('driver_location_changed', {
+    emitRealtime(`tracking_${driverId}`, 'driver_location_changed', {
       driverId,
       latitude: location.latitude,
       longitude: location.longitude,
@@ -727,7 +739,7 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
       },
     });
 
-    io.emit('new_thread', thread);
+    broadcastRealtime('new_thread', thread);
     res.status(201).json({ ok: true, thread });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create thread';
@@ -1118,7 +1130,7 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
       },
     });
 
-    io.to(`tracking_${threadId}`).emit('bid_accepted', {
+    emitRealtime(`tracking_${threadId}`, 'bid_accepted', {
       threadId,
       bidId,
       acceptedCarrierId,
@@ -1168,7 +1180,7 @@ app.post('/api/threads/:threadId/chat', requireAuth, async (req: AuthedRequest, 
       },
     });
 
-    io.to(`chat_${threadId}`).emit('chat_message_created', message);
+    emitRealtime(`chat_${threadId}`, 'chat_message_created', message);
     res.status(201).json({ ok: true, message });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send chat message';
@@ -1305,7 +1317,7 @@ app.patch('/api/threads/:threadId/delivery/status', requireAuth, async (req: Aut
       });
     }
 
-    io.to(`tracking_${threadId}`).emit('delivery_status_changed', {
+    emitRealtime(`tracking_${threadId}`, 'delivery_status_changed', {
       threadId,
       from: currentStatus,
       to: nextStatus,
@@ -1594,7 +1606,7 @@ app.put('/api/drivers/:driverId/location', requireAuth, async (req: AuthedReques
 
     driverLocationStore.set(driverId, payload);
     if (loadId) {
-      io.to(`tracking_${loadId}`).emit('driver_location_changed', {
+      emitRealtime(`tracking_${loadId}`, 'driver_location_changed', {
         driverId,
         lat,
         lng,
@@ -1774,35 +1786,42 @@ app.patch('/api/admin/admins/:targetUid/claim', requireAuth, requireSuperAdmin, 
   }
 });
 
-io.on('connection', (socket) => {
-  socket.on('join_chat', (threadId: string) => {
-    if (!threadId) {
-      return;
-    }
-    socket.join(`chat_${threadId}`);
-  });
+if (io) {
+  io.on('connection', (socket) => {
+    socket.on('join_chat', (threadId: string) => {
+      if (!threadId) {
+        return;
+      }
+      socket.join(`chat_${threadId}`);
+    });
 
-  socket.on('join_tracking', (loadId: string) => {
-    if (!loadId) {
-      return;
-    }
-    socket.join(`tracking_${loadId}`);
-  });
+    socket.on('join_tracking', (loadId: string) => {
+      if (!loadId) {
+        return;
+      }
+      socket.join(`tracking_${loadId}`);
+    });
 
-  socket.on('update_location', (data: { driverId: string; lat: number; lng: number; loadId: string }) => {
-    if (!data?.loadId) {
-      return;
-    }
-    io.to(`tracking_${data.loadId}`).emit('driver_location_changed', data);
+    socket.on('update_location', (data: { driverId: string; lat: number; lng: number; loadId: string }) => {
+      if (!data?.loadId) {
+        return;
+      }
+      emitRealtime(`tracking_${data.loadId}`, 'driver_location_changed', data);
+    });
   });
-});
+}
 
-httpServer.listen(port, () => {
-  console.log(`Backend API listening on http://localhost:${port}`);
-});
+if (httpServer) {
+  httpServer.listen(port, () => {
+    console.log(`Backend API listening on http://localhost:${port}`);
+  });
+}
 
 const shutdown = async () => {
   await prisma.$disconnect();
+  if (!httpServer) {
+    return;
+  }
   httpServer.close(() => {
     process.exit(0);
   });
@@ -1810,4 +1829,6 @@ const shutdown = async () => {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+export default app;
 

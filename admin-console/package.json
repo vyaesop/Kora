@@ -1,0 +1,7 @@
+{
+  "name": "kora-admin-console",
+  "private": true,
+  "scripts": {
+    "build": "node ./scripts/build.mjs"
+  }
+}

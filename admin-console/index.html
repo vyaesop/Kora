@@ -30,7 +30,7 @@
           <input id="apiBase" placeholder="https://your-backend-domain.com" />
           <button id="saveApiBtn" class="secondary">Save API Base</button>
         </div>
-        <small>Set your backend base URL once (example: <code>http://localhost:3000</code>). Stored locally in browser.</small>
+        <small>Set your backend base URL once. A Vercel build-time default can also prefill this field for production.</small>
       </section>
 
       <section class="card" id="claimCard">
@@ -63,6 +63,7 @@
       <pre id="logBox" class="log"></pre>
     </main>
 
+    <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

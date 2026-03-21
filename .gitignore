@@ -11,6 +11,7 @@ flutter_export_environment.sh
 node_modules/
 **/node_modules/
 backend/dist/
+admin-console/dist/
 
 # Android
 /android/gradlew
