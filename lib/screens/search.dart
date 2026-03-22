@@ -40,7 +40,7 @@ class _SearchScreenState extends State<SearchScreen> {
   DateTime? _lastUpdated;
 
   final List<String> _types =
-      const ['All', 'General', 'Fragile', 'Heavy', 'Food', 'Electronics', 'Other'];
+      const ['All','General', 'Coffee', 'Fuel', 'Food', 'Fertilizer', 'Construction Materials', 'Heavy Machinery', 'Livestock'];
   String _selectedType = 'All';
   bool _showClosed = false;
 

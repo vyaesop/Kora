@@ -25,8 +25,8 @@ class _PostScreenState extends State<PostScreen> {
   String _weightUnit = 'kg';
   bool _submitting = false;
 
-  final _types = const ['General', 'Fragile', 'Heavy', 'Food', 'Electronics', 'Other'];
-  final _units = const ['kg', 'ton'];
+  final _types = const ['General', 'Coffee', 'Fuel', 'Food', 'Fertilizer', 'Construction Materials', 'Heavy Machinery', 'Livestock'];
+  final _units = const ['kg', 'ton', 'quintal', '20ft container', '40ft container', 'litre'];
 
   @override
   void dispose() {
