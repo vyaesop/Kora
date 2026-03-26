@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'search.dart';
 
 class FeedScreen extends StatelessWidget {
-  const FeedScreen({super.key});
+  final bool showSearchField;
+
+  const FeedScreen({
+    super.key,
+    this.showSearchField = true,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const SearchScreen();
+    return SearchScreen(showSearchField: showSearchField);
   }
 }
-

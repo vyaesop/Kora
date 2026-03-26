@@ -747,8 +747,17 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
   }
 });
 
-app.get('/api/threads', async (_req: Request, res: Response) => {
+app.get('/api/threads', async (req: Request, res: Response) => {
   try {
+    const limitRaw = req.query.limit == null ? 12 : Number(req.query.limit);
+    const offsetRaw = req.query.offset == null ? 0 : Number(req.query.offset);
+    const limit = Number.isFinite(limitRaw) && (limitRaw as number) > 0
+      ? Math.min(limitRaw as number, 50)
+      : 12;
+    const offset = Number.isFinite(offsetRaw) && (offsetRaw as number) >= 0
+      ? Math.floor(offsetRaw as number)
+      : 0;
+
     const threads = await prisma.thread.findMany({
       include: {
         owner: {
@@ -756,8 +765,22 @@ app.get('/api/threads', async (_req: Request, res: Response) => {
         },
       },
       orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
     });
-    res.json({ ok: true, threads });
+
+    const hasMore = threads.length > limit;
+    const items = hasMore ? threads.slice(0, limit) : threads;
+    res.json({
+      ok: true,
+      threads: items,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + items.length : null,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch threads';
     res.status(500).json({ ok: false, error: message });

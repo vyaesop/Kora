@@ -15,6 +15,7 @@ class ThreadMessageWidget extends StatelessWidget {
   final dynamic panelController;
   final String userId;
   final bool showBidButton;
+  final bool showBidStatusWhenHidden;
 
   const ThreadMessageWidget({
     super.key,
@@ -26,6 +27,7 @@ class ThreadMessageWidget extends StatelessWidget {
     required this.panelController,
     required this.userId,
     this.showBidButton = true,
+    this.showBidStatusWhenHidden = true,
   });
 
   @override
@@ -278,7 +280,7 @@ class ThreadMessageWidget extends StatelessWidget {
                           elevation: 0,
                         ),
                       )
-                    else
+                    else if (showBidStatusWhenHidden)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
@@ -295,7 +297,9 @@ class ThreadMessageWidget extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
+                      )
+                    else
+                      const SizedBox.shrink(),
                   ],
                 ),
               ],
@@ -364,4 +368,3 @@ class ThreadMessageWidget extends StatelessWidget {
     );
   }
 }
-

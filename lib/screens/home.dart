@@ -46,8 +46,10 @@ class _HomeState extends State<Home> {
   int get _postTabIndex => currentUser?.userType == 'Cargo' ? 2 : -1;
 
   int get _profileTabIndex =>
-      currentUser?.userType == 'Cargo' || currentUser?.userType == 'Driver'
+      currentUser?.userType == 'Cargo'
           ? 4
+          : currentUser?.userType == 'Driver'
+              ? 3
           : 3;
 
   @override
@@ -136,9 +138,8 @@ class _HomeState extends State<Home> {
           onOpenProfile: _openProfileTab,
           onSelectTab: _openTab,
         ),
-        const FeedScreen(),
+        const FeedScreen(showSearchField: false),
         const MyBidsScreen(),
-        const SearchScreen(),
         const ProfileScreen(),
       ];
     }
@@ -184,9 +185,6 @@ class _HomeState extends State<Home> {
         BottomNavigationBarItem(
             icon: const Icon(Icons.local_offer),
             label: localizations.tr('myBids')),
-        BottomNavigationBarItem(
-            icon: const Icon(Icons.search),
-            label: localizations.tr('search')),
         BottomNavigationBarItem(
             icon: const Icon(Icons.person), label: localizations.tr('profile')),
       ];

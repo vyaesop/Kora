@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:kora/app_localizations.dart';
+import 'package:kora/model/thread_message.dart';
+import 'package:kora/utils/app_theme.dart';
+import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/error_handler.dart';
-import '../model/thread_message.dart';
-import '../utils/backend_auth_service.dart';
-import '../utils/backend_http.dart';
-import '../widgets/profile_avatar.dart';
-import '../widgets/thread_message.dart';
+import 'package:kora/widgets/profile_avatar.dart';
+import 'package:kora/widgets/thread_message.dart';
 import 'comment_screen.dart';
-import '../app_localizations.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,6 +19,11 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const String _pushNotificationsKey = 'profile_push_notifications';
+  static const String _bidAlertsKey = 'profile_bid_alerts';
+  static const String _loadMatchesKey = 'profile_load_matches';
+  static const String _marketingUpdatesKey = 'profile_marketing_updates';
+
   final _authService = BackendAuthService();
 
   bool _loading = true;
@@ -25,21 +32,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<ThreadMessage> _myThreads = const [];
   List<ThreadMessage> _acceptedLoads = const [];
 
+  bool _pushNotifications = true;
+  bool _bidAlerts = true;
+  bool _loadMatches = true;
+  bool _marketingUpdates = false;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  ThreadMessage _threadFromMap(Map<String, dynamic> row, {Map<String, dynamic>? owner}) {
-    final ownerData = owner ?? (row['owner'] as Map<String, dynamic>? ?? const <String, dynamic>{});
+  ThreadMessage _threadFromMap(
+    Map<String, dynamic> row, {
+    Map<String, dynamic>? owner,
+  }) {
+    final ownerData =
+        owner ?? (row['owner'] as Map<String, dynamic>? ?? const <String, dynamic>{});
     return ThreadMessage(
       id: (row['id'] ?? '').toString(),
       docId: (row['id'] ?? '').toString(),
       senderName: (ownerData['name'] ?? _user?['name'] ?? 'Unknown').toString(),
       senderProfileImageUrl: (ownerData['profileImageUrl'] ?? '').toString(),
       message: (row['message'] ?? '').toString(),
-      timestamp: DateTime.tryParse((row['createdAt'] ?? '').toString()) ?? DateTime.now(),
+      timestamp:
+          DateTime.tryParse((row['createdAt'] ?? '').toString()) ?? DateTime.now(),
       likes: const [],
       comments: const [],
       weight: (row['weight'] as num?)?.toDouble() ?? 0,
@@ -68,6 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception('Not signed in');
       }
 
+      final prefs = await SharedPreferences.getInstance();
       final userData = await BackendHttp.request(path: '/api/users/$userId');
       final user = userData['user'] as Map<String, dynamic>?;
       if (user == null) {
@@ -76,21 +94,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final threadsData = await BackendHttp.request(path: '/api/users/$userId/threads');
       final threadRows = (threadsData['threads'] is List)
-          ? (threadsData['threads'] as List).whereType<Map<String, dynamic>>().toList()
+          ? (threadsData['threads'] as List)
+              .whereType<Map<String, dynamic>>()
+              .toList()
           : <Map<String, dynamic>>[];
 
       final myThreads = threadRows.map((row) => _threadFromMap(row, owner: user)).toList();
 
       final myBidsData = await BackendHttp.request(path: '/api/bids/me');
       final bidRows = (myBidsData['bids'] is List)
-          ? (myBidsData['bids'] as List).whereType<Map<String, dynamic>>().toList()
+          ? (myBidsData['bids'] as List)
+              .whereType<Map<String, dynamic>>()
+              .toList()
           : <Map<String, dynamic>>[];
 
       final acceptedLoads = <ThreadMessage>[];
       for (final bid in bidRows) {
         final status = (bid['status'] ?? '').toString().toLowerCase();
         if (status != 'accepted' && status != 'completed') continue;
-
         final load = bid['load'];
         if (load is Map<String, dynamic>) {
           acceptedLoads.add(_threadFromMap(load));
@@ -102,6 +123,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _user = user;
         _myThreads = myThreads;
         _acceptedLoads = acceptedLoads;
+        _pushNotifications = prefs.getBool(_pushNotificationsKey) ?? true;
+        _bidAlerts = prefs.getBool(_bidAlertsKey) ?? true;
+        _loadMatches = prefs.getBool(_loadMatchesKey) ?? true;
+        _marketingUpdates = prefs.getBool(_marketingUpdatesKey) ?? false;
         _loading = false;
       });
     } catch (e) {
@@ -111,6 +136,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = ErrorHandler.getMessage(e);
       });
     }
+  }
+
+  Future<void> _updatePreference(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
   }
 
   Future<void> _signOut() async {
@@ -133,7 +163,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirmed != true) return;
-
     await _authService.clearSession();
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
@@ -143,19 +172,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (threads.isEmpty) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Text(AppLocalizations.of(context).tr('noItemsYet')),
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: threads.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final thread = threads[index];
         return GestureDetector(
@@ -163,7 +194,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => CommentScreen(message: thread, threadId: thread.docId),
+                builder: (_) => CommentScreen(
+                  message: thread,
+                  threadId: thread.docId,
+                ),
               ),
             );
           },
@@ -176,6 +210,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             panelController: null,
             userId: (_user?['id'] ?? '').toString(),
             showBidButton: false,
+            showBidStatusWhenHidden: false,
           ),
         );
       },
@@ -186,9 +221,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_error != null) {
@@ -201,15 +234,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = _user ?? const <String, dynamic>{};
     final ratingAvg = (user['ratingAverage'] as num?)?.toDouble() ?? 0;
     final ratingCount = (user['ratingCount'] as num?)?.toInt() ?? 0;
+    final verification = (user['verificationStatus'] ?? 'pending').toString();
+    final userType = (user['userType'] ?? 'Cargo').toString();
+    final address = user['address']?.toString();
+    final truckType = user['truckType']?.toString();
 
     return Scaffold(
+      backgroundColor: AppPalette.surface,
       appBar: AppBar(
         title: Text(localizations.tr('profile')),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: localizations.tr('logout'),
@@ -218,53 +253,166 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ProfileAvatar(
-                      imageUrl: user['profileImageUrl']?.toString(),
-                      radius: 30,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            (user['name'] ?? 'Unknown').toString(),
-                            style: const TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text((user['email'] ?? '').toString()),
-                          const SizedBox(height: 2),
-                          Text(
-                              '${localizations.tr('typeLabel')}: ${(user['userType'] ?? 'Cargo').toString()}'),
-                          Text(
-                              '${localizations.tr('ratingLabel')}: ${ratingAvg.toStringAsFixed(2)} ($ratingCount)'),
-                        ],
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: AppPalette.heroGradient,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha((0.14 * 255).round()),
+                    blurRadius: 24,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ProfileAvatar(
+                        imageUrl: user['profileImageUrl']?.toString(),
+                        radius: 34,
                       ),
-                    )
-                  ],
-                ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              (user['name'] ?? 'Unknown').toString(),
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              (user['email'] ?? '').toString(),
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _HeroChip(label: userType),
+                      _HeroChip(label: 'Verification: $verification'),
+                      _HeroChip(
+                        label:
+                            '${localizations.tr('ratingLabel')}: ${ratingAvg.toStringAsFixed(1)} ($ratingCount)',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ProfileMetricCard(
+                          label: localizations.tr('myLoads'),
+                          value: _myThreads.length.toString(),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _ProfileMetricCard(
+                          label: localizations.tr('acceptedLoads'),
+                          value: _acceptedLoads.length.toString(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            Text(localizations.tr('myLoads'),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 18),
+            _SectionTitle(
+              title: 'Account details',
+              subtitle: 'Important profile information at a glance.',
+            ),
+            const SizedBox(height: 10),
+            _InfoCard(
+              children: [
+                _InfoRow(label: localizations.tr('typeLabel'), value: userType),
+                if (address != null && address.isNotEmpty)
+                  _InfoRow(label: 'Address', value: address),
+                if (truckType != null && truckType.isNotEmpty)
+                  _InfoRow(label: localizations.tr('truckTypeLabel'), value: truckType),
+                _InfoRow(label: 'Verification status', value: verification),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SectionTitle(
+              title: 'Settings',
+              subtitle: 'Notification and account preferences saved on this device.',
+            ),
+            const SizedBox(height: 10),
+            _InfoCard(
+              children: [
+                _SettingsTile(
+                  title: 'Push notifications',
+                  subtitle: 'General reminders and important account activity.',
+                  value: _pushNotifications,
+                  onChanged: (value) {
+                    setState(() => _pushNotifications = value);
+                    _updatePreference(_pushNotificationsKey, value);
+                  },
+                ),
+                _SettingsTile(
+                  title: 'Bid alerts',
+                  subtitle: 'Updates when bids are placed, accepted, or changed.',
+                  value: _bidAlerts,
+                  onChanged: (value) {
+                    setState(() => _bidAlerts = value);
+                    _updatePreference(_bidAlertsKey, value);
+                  },
+                ),
+                _SettingsTile(
+                  title: 'Matching load suggestions',
+                  subtitle: 'Recommendations for loads or drivers based on activity.',
+                  value: _loadMatches,
+                  onChanged: (value) {
+                    setState(() => _loadMatches = value);
+                    _updatePreference(_loadMatchesKey, value);
+                  },
+                ),
+                _SettingsTile(
+                  title: 'Product updates',
+                  subtitle: 'Optional updates about improvements and new features.',
+                  value: _marketingUpdates,
+                  onChanged: (value) {
+                    setState(() => _marketingUpdates = value);
+                    _updatePreference(_marketingUpdatesKey, value);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _SectionTitle(
+              title: localizations.tr('myLoads'),
+              subtitle: 'Your posted or owned shipments.',
+            ),
+            const SizedBox(height: 10),
             _threadList(_myThreads),
-            const SizedBox(height: 16),
-            Text(localizations.tr('acceptedLoads'),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 18),
+            _SectionTitle(
+              title: localizations.tr('acceptedLoads'),
+              subtitle: 'Loads currently awarded to you.',
+            ),
+            const SizedBox(height: 10),
             _threadList(_acceptedLoads),
           ],
         ),
@@ -273,3 +421,198 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _SectionTitle({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppPalette.ink,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.black54,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroChip extends StatelessWidget {
+  final String label;
+
+  const _HeroChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.12 * 255).round()),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+    );
+  }
+}
+
+class _ProfileMetricCard extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ProfileMetricCard({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.1 * 255).round()),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final List<Widget> children;
+
+  const _InfoCard({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.black54,
+                  ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppPalette.ink,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SettingsTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile.adaptive(
+      value: value,
+      onChanged: onChanged,
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
+              height: 1.4,
+            ),
+      ),
+    );
+  }
+}

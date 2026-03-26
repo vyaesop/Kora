@@ -4,18 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 
+import '../app_localizations.dart';
 import '../model/thread_message.dart';
+import '../utils/app_theme.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_http.dart';
-import '../utils/app_theme.dart';
 import '../utils/error_handler.dart';
 import '../widgets/thread_message.dart';
 import 'comment_screen.dart';
 import 'post_comment_screen.dart';
-import '../app_localizations.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final bool showSearchField;
+
+  const SearchScreen({
+    super.key,
+    this.showSearchField = true,
+  });
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -28,19 +33,33 @@ class _SearchScreenState extends State<SearchScreen> {
   static const Color _card = AppPalette.card;
   static const Color _accent = AppPalette.accent;
   static const Color _accentWarm = AppPalette.accentWarm;
+  static const int _pageSize = 12;
 
   final TextEditingController _searchController = TextEditingController();
   final PanelController _panelController = PanelController();
   final BackendAuthService _authService = BackendAuthService();
+  final ScrollController _scrollController = ScrollController();
 
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   String? _error;
   String? _currentUserId;
   String? _threadDocForBid;
   DateTime? _lastUpdated;
+  int _nextOffset = 0;
 
-  final List<String> _types =
-      const ['All','General', 'Coffee', 'Fuel', 'Food', 'Fertilizer', 'Construction Materials', 'Heavy Machinery', 'Livestock'];
+  final List<String> _types = const [
+    'All',
+    'General',
+    'Coffee',
+    'Fuel',
+    'Food',
+    'Fertilizer',
+    'Construction Materials',
+    'Heavy Machinery',
+    'Livestock',
+  ];
   String _selectedType = 'All';
   bool _showClosed = false;
 
@@ -51,6 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _bootstrap();
   }
 
@@ -58,6 +78,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _pollTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -69,6 +90,16 @@ class _SearchScreenState extends State<SearchScreen> {
     await _refresh(showLoader: true);
   }
 
+  void _handleScroll() {
+    if (!_scrollController.hasClients || _loading || _loadingMore || !_hasMore) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 360) {
+      _loadMore();
+    }
+  }
+
   Future<void> _refresh({required bool showLoader}) async {
     if (showLoader && mounted) {
       setState(() {
@@ -78,44 +109,107 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     try {
-      final threadsData = await BackendHttp.request(path: '/api/threads', auth: false);
       final bidsData = await BackendHttp.request(path: '/api/bids/me');
-
-      final threadRows = (threadsData['threads'] is List)
-          ? (threadsData['threads'] as List).whereType<Map<String, dynamic>>().toList()
-          : <Map<String, dynamic>>[];
-
-      final bidRows = (bidsData['bids'] is List)
-          ? (bidsData['bids'] as List).whereType<Map<String, dynamic>>().toList()
-          : <Map<String, dynamic>>[];
-
-      final threads = threadRows.map(_toThreadMessage).toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      final myBidThreads = <String>{};
-      for (final bid in bidRows) {
-        final load = bid['load'];
-        if (load is Map<String, dynamic>) {
-          final id = (load['id'] ?? '').toString();
-          if (id.isNotEmpty) myBidThreads.add(id);
-        }
-      }
+      final myBidThreads = _extractBidThreadIds(bidsData);
+      final page = await _fetchThreadsPage(offset: 0);
 
       if (!mounted) return;
       setState(() {
-        _allThreads = threads;
         _myBidThreadIds = myBidThreads;
+        _allThreads = page.threads;
+        _hasMore = page.hasMore;
+        _nextOffset = page.nextOffset;
         _loading = false;
+        _loadingMore = false;
         _error = null;
+        _lastUpdated = DateTime.now();
+      });
+
+      await _ensureVisibleResults();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _error = ErrorHandler.getMessage(e);
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _fetchThreadsPage(offset: _nextOffset);
+      if (!mounted) return;
+      setState(() {
+        _allThreads = [..._allThreads, ...page.threads];
+        _hasMore = page.hasMore;
+        _nextOffset = page.nextOffset;
+        _loadingMore = false;
         _lastUpdated = DateTime.now();
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _loading = false;
+        _loadingMore = false;
         _error = ErrorHandler.getMessage(e);
       });
     }
+  }
+
+  Future<void> _ensureVisibleResults() async {
+    while (mounted &&
+        !_loading &&
+        !_loadingMore &&
+        _hasMore &&
+        (_filteredThreads.isEmpty ||
+            (_hasActiveFilters && _filteredThreads.length < 4))) {
+      await _loadMore();
+    }
+  }
+
+  Future<_ThreadsPage> _fetchThreadsPage({required int offset}) async {
+    final data = await BackendHttp.request(
+      path: '/api/threads?limit=$_pageSize&offset=$offset',
+      auth: false,
+    );
+
+    final threadRows = (data['threads'] is List)
+        ? (data['threads'] as List).whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+    final pagination =
+        data['pagination'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+
+    final threads = threadRows.map(_toThreadMessage).toList();
+    final hasMore = pagination['hasMore'] == true;
+    final nextOffset = (pagination['nextOffset'] as num?)?.toInt() ??
+        (offset + threads.length);
+
+    return _ThreadsPage(
+      threads: threads,
+      hasMore: hasMore,
+      nextOffset: nextOffset,
+    );
+  }
+
+  Set<String> _extractBidThreadIds(Map<String, dynamic> bidsData) {
+    final bidRows = (bidsData['bids'] is List)
+        ? (bidsData['bids'] as List).whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+
+    final myBidThreads = <String>{};
+    for (final bid in bidRows) {
+      final load = bid['load'];
+      if (load is Map<String, dynamic>) {
+        final id = (load['id'] ?? '').toString();
+        if (id.isNotEmpty) {
+          myBidThreads.add(id);
+        }
+      }
+    }
+    return myBidThreads;
   }
 
   ThreadMessage _toThreadMessage(Map<String, dynamic> row) {
@@ -129,7 +223,8 @@ class _SearchScreenState extends State<SearchScreen> {
       senderName: (owner['name'] ?? 'Unknown').toString(),
       senderProfileImageUrl: (owner['profileImageUrl'] ?? '').toString(),
       message: (row['message'] ?? '').toString(),
-      timestamp: DateTime.tryParse((row['createdAt'] ?? '').toString()) ?? DateTime.now(),
+      timestamp:
+          DateTime.tryParse((row['createdAt'] ?? '').toString()) ?? DateTime.now(),
       likes: const [],
       comments: const [],
       weight: (row['weight'] as num?)?.toDouble() ?? 0,
@@ -150,17 +245,16 @@ class _SearchScreenState extends State<SearchScreen> {
     final q = _searchController.text.trim().toLowerCase();
 
     return _allThreads.where((t) {
-      if (!_showClosed &&
-          (t.deliveryStatus ?? 'pending_bids') != 'pending_bids') {
+      if (!_showClosed && (t.deliveryStatus ?? 'pending_bids') != 'pending_bids') {
         return false;
       }
-      if (_selectedType != 'All' && t.type != _selectedType) return false;
-
-      if (q.isNotEmpty) {
+      if (_selectedType != 'All' && t.type != _selectedType) {
+        return false;
+      }
+      if (widget.showSearchField && q.isNotEmpty) {
         final hay = '${t.start} ${t.end} ${t.message} ${t.type}'.toLowerCase();
         if (!hay.contains(q)) return false;
       }
-
       return true;
     }).toList();
   }
@@ -191,11 +285,14 @@ class _SearchScreenState extends State<SearchScreen> {
   bool get _hasSearch => _searchController.text.trim().isNotEmpty;
 
   bool get _hasActiveFilters =>
-      _hasSearch || _selectedType != 'All' || _showClosed;
+      (widget.showSearchField && _hasSearch) ||
+      _selectedType != 'All' ||
+      _showClosed;
 
   void _clearSearch() {
     _searchController.clear();
     setState(() {});
+    unawaited(_ensureVisibleResults());
   }
 
   void _resetFilters() {
@@ -204,11 +301,12 @@ class _SearchScreenState extends State<SearchScreen> {
       _selectedType = 'All';
       _showClosed = false;
     });
+    unawaited(_ensureVisibleResults());
   }
 
   Widget _buildFilters(AppLocalizations localizations) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
         color: _card,
@@ -219,7 +317,7 @@ class _SearchScreenState extends State<SearchScreen> {
             color: Colors.black.withAlpha((0.04 * 255).round()),
             blurRadius: 16,
             offset: const Offset(0, 12),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -228,7 +326,7 @@ class _SearchScreenState extends State<SearchScreen> {
           Row(
             children: [
               Text(
-                localizations.tr('searchLoads'),
+                widget.showSearchField ? localizations.tr('searchLoads') : 'Filters',
                 style: GoogleFonts.spaceGrotesk(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -236,11 +334,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               const Spacer(),
-              if (_hasSearch)
+              if (_hasActiveFilters)
                 TextButton(
-                  onPressed: _clearSearch,
+                  onPressed: _resetFilters,
                   child: Text(
-                    localizations.tr('cancel'),
+                    widget.showSearchField
+                        ? localizations.tr('cancel')
+                        : localizations.tr('viewAll'),
                     style: GoogleFonts.manrope(
                       color: Colors.grey.shade700,
                       fontWeight: FontWeight.w600,
@@ -249,31 +349,36 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            style: GoogleFonts.manrope(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: localizations.tr('searchHint'),
-              hintStyle: GoogleFonts.manrope(color: Colors.grey.shade500),
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _hasSearch
-                  ? IconButton(
-                      onPressed: _clearSearch,
-                      icon: const Icon(Icons.close),
-                    )
-                  : null,
-              filled: true,
-              fillColor: const Color(0xFFF8FAFC),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
+          if (widget.showSearchField) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _searchController,
+              onChanged: (_) {
+                setState(() {});
+                unawaited(_ensureVisibleResults());
+              },
+              style: GoogleFonts.manrope(fontSize: 14),
+              decoration: InputDecoration(
+                hintText: localizations.tr('searchHint'),
+                hintStyle: GoogleFonts.manrope(color: Colors.grey.shade500),
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: _hasSearch
+                    ? IconButton(
+                        onPressed: _clearSearch,
+                        icon: const Icon(Icons.close),
+                      )
+                    : null,
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 12),
           SizedBox(
             height: 38,
@@ -287,7 +392,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 return ChoiceChip(
                   label: Text(_typeLabel(type, localizations)),
                   selected: selected,
-                  onSelected: (_) => setState(() => _selectedType = type),
+                  onSelected: (_) {
+                    setState(() => _selectedType = type);
+                    unawaited(_ensureVisibleResults());
+                  },
                   selectedColor: const Color(0xFFE0F2FE),
                   backgroundColor: const Color(0xFFF1F5F9),
                   labelStyle: GoogleFonts.manrope(
@@ -309,6 +417,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 selected: _showClosed,
                 onSelected: (value) {
                   setState(() => _showClosed = value);
+                  unawaited(_ensureVisibleResults());
                 },
                 labelStyle: GoogleFonts.manrope(
                   fontWeight: FontWeight.w600,
@@ -326,13 +435,16 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               const Spacer(),
-              Text(
-                _showClosed
-                    ? localizations.tr('showingAllLoads')
-                    : localizations.tr('showingOpenOnly'),
-                style: GoogleFonts.manrope(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
+              Flexible(
+                child: Text(
+                  _showClosed
+                      ? localizations.tr('showingAllLoads')
+                      : localizations.tr('showingOpenOnly'),
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.manrope(
+                    color: Colors.grey.shade600,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -346,6 +458,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     final threads = _filteredThreads;
+    final bottomSpacing = MediaQuery.of(context).padding.bottom + 116.0;
 
     return Scaffold(
       backgroundColor: _surface,
@@ -406,8 +519,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     _buildFilters(localizations),
                     if (_lastUpdated != null)
                       Padding(
-                        padding: const EdgeInsets.only(
-                            left: 18, right: 18, bottom: 6),
+                        padding:
+                            const EdgeInsets.only(left: 18, right: 18, bottom: 6),
                         child: Row(
                           children: [
                             Icon(Icons.schedule,
@@ -475,7 +588,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                           child: SizedBox(
                                             height:
                                                 MediaQuery.of(context).size.height *
-                                                    0.6,
+                                                    0.48,
                                             child: Center(
                                               key: const ValueKey('empty'),
                                               child: Column(
@@ -483,9 +596,8 @@ class _SearchScreenState extends State<SearchScreen> {
                                                     MainAxisAlignment.center,
                                                 children: [
                                                   Icon(
-                                                      Icons
-                                                          .inventory_2_outlined,
-                                                      size: 64, // Larger icon
+                                                      Icons.inventory_2_outlined,
+                                                      size: 64,
                                                       color:
                                                           Colors.grey.shade300),
                                                   const SizedBox(height: 16),
@@ -502,24 +614,27 @@ class _SearchScreenState extends State<SearchScreen> {
                                                   ),
                                                   const SizedBox(height: 8),
                                                   Text(
-                                                    _hasActiveFilters
-                                                        ? 'Try adjusting your filters'
-                                                        : 'Check back later for new loads',
+                                                    _hasMore
+                                                        ? 'Loading more loads for your filters...'
+                                                        : _hasActiveFilters
+                                                            ? 'Try adjusting your filters'
+                                                            : 'Check back later for new loads',
                                                     style: GoogleFonts.manrope(
                                                       fontSize: 14,
                                                       color:
                                                           Colors.grey.shade500,
                                                     ),
                                                   ),
-                                                  if (_hasActiveFilters) ...[
+                                                  if (_hasActiveFilters &&
+                                                      !_hasMore) ...[
                                                     const SizedBox(height: 16),
                                                     OutlinedButton.icon(
                                                       onPressed: _resetFilters,
-                                                      icon: const Icon(Icons
-                                                          .filter_alt_off),
+                                                      icon: const Icon(
+                                                          Icons.filter_alt_off),
                                                       label: Text(
-                                                        localizations.tr(
-                                                            'viewAll'),
+                                                        localizations
+                                                            .tr('viewAll'),
                                                       ),
                                                     ),
                                                   ],
@@ -534,16 +649,34 @@ class _SearchScreenState extends State<SearchScreen> {
                                         onRefresh: () =>
                                             _refresh(showLoader: false),
                                         child: ListView.separated(
-                                          padding: const EdgeInsets.fromLTRB(
-                                              16, 4, 16, 28),
-                                          itemCount: threads.length,
+                                          controller: _scrollController,
+                                          padding: EdgeInsets.fromLTRB(
+                                            16,
+                                            4,
+                                            16,
+                                            bottomSpacing,
+                                          ),
+                                          itemCount:
+                                              threads.length + (_loadingMore ? 1 : 0),
                                           separatorBuilder: (_, __) =>
                                               const SizedBox(height: 12),
                                           itemBuilder: (context, index) {
+                                            if (index >= threads.length) {
+                                              return const Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: 8),
+                                                child: Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                ),
+                                              );
+                                            }
+
                                             final thread = threads[index];
                                             final alreadyBid =
-                                                _myBidThreadIds
-                                                    .contains(thread.docId);
+                                                _myBidThreadIds.contains(
+                                              thread.docId,
+                                            );
 
                                             return GestureDetector(
                                               onTap: () {
@@ -604,3 +737,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
+class _ThreadsPage {
+  final List<ThreadMessage> threads;
+  final bool hasMore;
+  final int nextOffset;
+
+  const _ThreadsPage({
+    required this.threads,
+    required this.hasMore,
+    required this.nextOffset,
+  });
+}
