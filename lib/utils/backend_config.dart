@@ -2,9 +2,16 @@ import 'package:flutter/foundation.dart';
 
 class BackendConfig {
   static String get baseUrl {
-    const configured = String.fromEnvironment('KORA_API_BASE_URL');
-    if (configured.isNotEmpty) {
+    final configured = _normalize(const String.fromEnvironment('KORA_API_BASE_URL'));
+    if (configured != null) {
       return configured;
+    }
+
+    if (kReleaseMode) {
+      throw StateError(
+        'Missing KORA_API_BASE_URL. Build release artifacts with '
+        '--dart-define=KORA_API_BASE_URL=https://kora-backend-alpha.vercel.app',
+      );
     }
 
     if (kIsWeb) {
@@ -21,6 +28,14 @@ class BackendConfig {
       case TargetPlatform.fuchsia:
         return 'http://localhost:3000';
     }
+  }
+
+  static String? _normalize(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
   }
 }
 

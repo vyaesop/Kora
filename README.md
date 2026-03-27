@@ -15,5 +15,17 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
+## Release APKs
+
+Production APKs must be built with a real backend URL so they can reach your deployed API from other phones.
+
+Example:
+
+```bash
+flutter build apk --release --dart-define=KORA_API_BASE_URL=https://your-backend.vercel.app
+```
+
+Android release builds now include `INTERNET` permission from the main manifest.
+
 
 npm run dev:admin
