@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:kora/utils/backend_auth_service.dart';
-import 'package:kora/utils/backend_config.dart';
 import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/backend_http.dart';
 
 class DriverLocationSnapshot {
   final LatLng? location;
@@ -27,7 +24,6 @@ class TrackDriverMapScreen extends StatefulWidget {
 class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
   final MapController _mapController = MapController();
   final Distance _distance = const Distance();
-  final BackendAuthService _authService = BackendAuthService();
 
   DriverLocationSnapshot? _driverSnapshot;
   Map<String, dynamic>? _threadData;
@@ -46,31 +42,6 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
   void dispose() {
     _pollTimer?.cancel();
     super.dispose();
-  }
-
-  Future<Map<String, dynamic>> _authedRequest(String path) async {
-    final token = await _authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(raw) as Map<String, dynamic>;
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-      return data;
-    } finally {
-      client.close(force: true);
-    }
   }
 
   DriverLocationSnapshot _parseLocation(Map<String, dynamic>? map) {
@@ -95,8 +66,18 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
     }
 
     try {
-      final locationData = await _authedRequest('/api/drivers/${widget.driverId}/location');
-      final threadData = await _authedRequest('/api/threads/${widget.loadId}');
+      final responses = await Future.wait([
+        BackendHttp.request(
+          path: '/api/drivers/${widget.driverId}/location',
+          forceRefresh: true,
+        ),
+        BackendHttp.request(
+          path: '/api/threads/${widget.loadId}',
+          forceRefresh: true,
+        ),
+      ]);
+      final locationData = responses[0];
+      final threadData = responses[1];
       final snapshot = _parseLocation(locationData['location'] as Map<String, dynamic>?);
 
       if (!mounted) return;

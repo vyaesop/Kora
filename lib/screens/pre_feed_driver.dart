@@ -1,12 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:kora/app_localizations.dart';
 import 'package:kora/model/user.dart';
 import 'package:kora/utils/app_theme.dart';
-import 'package:kora/utils/backend_auth_service.dart';
-import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
@@ -41,33 +37,12 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
     _acceptedLoadsFuture = _fetchAcceptedLoads();
   }
 
-  Future<Map<String, dynamic>> _authedRequest(String path) async {
-    final token = await BackendAuthService().getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(raw) as Map<String, dynamic>;
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-      return data;
-    } finally {
-      client.close(force: true);
-    }
-  }
-
   Future<List<Map<String, dynamic>>> _fetchSuggestedLoads() async {
-    final data = await _authedRequest('/api/threads?limit=100');
+    final data = await BackendHttp.request(
+      path: '/api/threads?limit=8',
+      auth: false,
+      cacheTtl: const Duration(seconds: 20),
+    );
     return (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where(
@@ -79,13 +54,18 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchAcceptedLoads() async {
-    final acceptedIds = (widget.user.acceptedLoads ?? []).take(10).toSet();
-    if (acceptedIds.isEmpty) return [];
-
-    final data = await _authedRequest('/api/threads?limit=100');
-    return (data['threads'] as List<dynamic>? ?? const [])
+    final data = await BackendHttp.request(
+      path: '/api/bids/me',
+      cacheTtl: const Duration(seconds: 20),
+    );
+    return (data['bids'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .where((thread) => acceptedIds.contains((thread['id'] ?? '').toString()))
+        .where((bid) {
+          final status = (bid['status'] ?? '').toString().toLowerCase();
+          return status == 'accepted' || status == 'completed';
+        })
+        .map((bid) => bid['load'])
+        .whereType<Map<String, dynamic>>()
         .toList();
   }
 

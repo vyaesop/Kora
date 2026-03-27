@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'dart:io';
 
-import '../utils/backend_auth_service.dart';
-import '../utils/backend_config.dart';
+import '../utils/backend_http.dart';
 import '../app_localizations.dart';
 
 class PlaceBidWidget extends StatefulWidget {
@@ -22,7 +20,6 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
   bool _loading = false;
   bool _loadingExistingBid = true;
   String? _existingBidId;
-  final BackendAuthService _authService = BackendAuthService();
 
   static const double _platformFeeRate = 0.05;
 
@@ -52,35 +49,12 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
     String method = 'GET',
     Map<String, dynamic>? body,
   }) async {
-    final token = await _authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.openUrl(method, uri);
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      if (body != null) {
-        req.add(utf8.encode(jsonEncode(body)));
-      }
-
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(raw) as Map<String, dynamic>;
-
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-
-      return data;
-    } finally {
-      client.close(force: true);
-    }
+    return BackendHttp.request(
+      path: path,
+      method: method,
+      body: body,
+      forceRefresh: method.toUpperCase() != 'GET',
+    );
   }
 
   Map<String, dynamic> _parseBidNote(String? note) {

@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../utils/backend_auth_service.dart';
-import '../utils/backend_config.dart';
+import '../utils/backend_http.dart';
 import '../utils/error_handler.dart';
 import '../app_localizations.dart';
 
@@ -103,36 +101,12 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
     String method = 'GET',
     Map<String, dynamic>? body,
   }) async {
-    final token = await _authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.openUrl(method, uri);
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-
-      if (body != null) {
-        req.add(utf8.encode(jsonEncode(body)));
-      }
-
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(raw) as Map<String, dynamic>;
-
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-
-      return data;
-    } finally {
-      client.close(force: true);
-    }
+    return BackendHttp.request(
+      path: path,
+      method: method,
+      body: body,
+      forceRefresh: true,
+    );
   }
 
   Future<void> _loadMessages({required bool showLoader}) async {

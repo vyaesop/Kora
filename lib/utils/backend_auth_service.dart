@@ -1,14 +1,17 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../model/user.dart';
 import 'backend_config.dart';
+import 'backend_transport.dart';
 
 class BackendAuthService {
   static const _tokenKey = 'kora_auth_token';
   static const _userKey = 'kora_auth_user';
+  static String? _cachedToken;
+  static Map<String, dynamic>? _cachedUserMap;
+  static bool _cacheLoaded = false;
 
   Future<Map<String, dynamic>> _request({
     required String path,
@@ -17,30 +20,12 @@ class BackendAuthService {
     String? token,
   }) async {
     final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.openUrl(method, uri);
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      if (token != null && token.isNotEmpty) {
-        req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      }
-
-      if (body != null) {
-        req.add(utf8.encode(jsonEncode(body)));
-      }
-
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-
-      return data;
-    } finally {
-      client.close(force: true);
-    }
+    return BackendTransport.request(
+      uri: uri,
+      method: method,
+      body: body,
+      token: token,
+    );
   }
 
   UserModel _toUserModel(Map<String, dynamic> payload) {
@@ -135,8 +120,7 @@ class BackendAuthService {
   }
 
   Future<UserModel?> restoreSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(_tokenKey);
+    final token = await getToken();
     if (token == null || token.isEmpty) {
       return null;
     }
@@ -153,22 +137,15 @@ class BackendAuthService {
   }
 
   Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    await _primeCache();
+    return _cachedToken;
   }
 
   Future<Map<String, dynamic>?> getStoredUserMap() async {
-    final prefs = await SharedPreferences.getInstance();
-    final rawUser = prefs.getString(_userKey);
-    if (rawUser == null || rawUser.isEmpty) {
-      return null;
-    }
-
-    try {
-      return jsonDecode(rawUser) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
-    }
+    await _primeCache();
+    return _cachedUserMap == null
+        ? null
+        : Map<String, dynamic>.from(_cachedUserMap!);
   }
 
   Future<String?> getCurrentUserId() async {
@@ -185,6 +162,9 @@ class BackendAuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    _cachedToken = null;
+    _cachedUserMap = null;
+    _cacheLoaded = true;
   }
 
   Future<void> _saveSession({
@@ -194,6 +174,31 @@ class BackendAuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
     await prefs.setString(_userKey, jsonEncode(user));
+    _cachedToken = token;
+    _cachedUserMap = Map<String, dynamic>.from(user);
+    _cacheLoaded = true;
+  }
+
+  Future<void> _primeCache() async {
+    if (_cacheLoaded) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    _cachedToken = prefs.getString(_tokenKey);
+
+    final rawUser = prefs.getString(_userKey);
+    if (rawUser != null && rawUser.isNotEmpty) {
+      try {
+        _cachedUserMap = jsonDecode(rawUser) as Map<String, dynamic>;
+      } catch (_) {
+        _cachedUserMap = null;
+      }
+    } else {
+      _cachedUserMap = null;
+    }
+
+    _cacheLoaded = true;
   }
 }
 

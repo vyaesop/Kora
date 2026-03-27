@@ -811,6 +811,69 @@ app.get('/api/threads/:threadId', requireAuth, async (req: AuthedRequest, res: R
   }
 });
 
+app.delete('/api/threads/:threadId', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const threadId = asSingleParam(req.params.threadId);
+    const userId = req.auth?.userId;
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const thread = await prisma.thread.findUnique({
+      where: { id: threadId },
+      select: { id: true, ownerId: true, deliveryStatus: true },
+    });
+
+    if (!thread) {
+      res.status(404).json({ ok: false, error: 'Thread not found' });
+      return;
+    }
+
+    if (thread.ownerId !== userId) {
+      res.status(403).json({ ok: false, error: 'Only load owner can delete this thread' });
+      return;
+    }
+
+    const deliveryStatus = String(thread.deliveryStatus || 'pending_bids')
+      .trim()
+      .toLowerCase();
+    if (deliveryStatus !== 'pending_bids') {
+      res.status(409).json({
+        ok: false,
+        error: 'Only loads that are still open for bids can be deleted.',
+      });
+      return;
+    }
+
+    const bidRows = await prisma.bid.findMany({
+      where: { loadId: threadId },
+      select: { id: true },
+    });
+    const bidIds = bidRows.map((bid) => bid.id);
+
+    await prisma.$transaction(async (tx) => {
+      if (bidIds.length > 0) {
+        await tx.driverRating.deleteMany({
+          where: { bidId: { in: bidIds } },
+        });
+      }
+
+      await tx.chatMessage.deleteMany({ where: { threadId } });
+      await tx.dispute.deleteMany({ where: { threadId } });
+      await tx.comment.deleteMany({ where: { threadId } });
+      await tx.bid.deleteMany({ where: { loadId: threadId } });
+      await tx.thread.delete({ where: { id: threadId } });
+    });
+
+    res.json({ ok: true, deleted: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete thread';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
 app.get('/api/threads/:threadId/bids', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const threadId = asSingleParam(req.params.threadId);

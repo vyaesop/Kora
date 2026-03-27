@@ -129,88 +129,44 @@ class ThreadMessageWidget extends StatelessWidget {
                           isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
                     ),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Column(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 340;
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: statusColor.withAlpha((0.9 * 255).round()),
+                          Expanded(
+                            child: _routeStop(
+                              isDark: isDark,
+                              label: localizations.tr('pickup'),
+                              value: message.start,
+                              icon: Icons.trip_origin,
+                              accentColor: statusColor,
                             ),
                           ),
-                          Container(
-                            width: 2,
-                            height: 28,
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            color: Colors.blueGrey.shade200,
+                          Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 8 : 12,
+                              vertical: compact ? 14 : 18,
+                            ),
+                            child: _RouteConnector(
+                              color: statusColor,
+                              isDark: isDark,
+                              compact: compact,
+                            ),
                           ),
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.rectangle,
-                              borderRadius: BorderRadius.circular(3),
-                              color: const Color(0xFF0F172A),
+                          Expanded(
+                            child: _routeStop(
+                              isDark: isDark,
+                              label: localizations.tr('delivery'),
+                              value: message.end,
+                              icon: Icons.location_on_outlined,
+                              accentColor: const Color(0xFF0F172A),
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              localizations.tr('pickup'),
-                              style: GoogleFonts.manrope(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blueGrey.shade500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              message.start,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.spaceGrotesk(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: isDark
-                                    ? const Color(0xFFE5EEF8)
-                                    : const Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              localizations.tr('delivery'),
-                              style: GoogleFonts.manrope(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blueGrey.shade500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              message.end,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.spaceGrotesk(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: isDark
-                                    ? const Color(0xFFE5EEF8)
-                                    : const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
                 if (message.message.trim().isNotEmpty) ...[
@@ -370,6 +326,104 @@ class ThreadMessageWidget extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _routeStop({
+    required bool isDark,
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF142033) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: accentColor),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.manrope(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.blueGrey.shade500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.spaceGrotesk(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: isDark
+                  ? const Color(0xFFE5EEF8)
+                  : const Color(0xFF0F172A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteConnector extends StatelessWidget {
+  final Color color;
+  final bool isDark;
+  final bool compact;
+
+  const _RouteConnector({
+    required this.color,
+    required this.isDark,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: compact ? 30 : 38,
+          height: 2,
+          color: isDark ? const Color(0xFF243247) : const Color(0xFFCBD5E1),
+        ),
+        Container(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withAlpha((0.14 * 255).round()),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.east_rounded,
+            size: compact ? 14 : 16,
+            color: color,
+          ),
+        ),
+        Container(
+          width: compact ? 30 : 38,
+          height: 2,
+          color: isDark ? const Color(0xFF243247) : const Color(0xFFCBD5E1),
+        ),
+      ],
     );
   }
 }

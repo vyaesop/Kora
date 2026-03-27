@@ -69,10 +69,18 @@ class _CommentScreenState extends State<CommentScreen> {
     }
 
     try {
-      final threadData =
-          await BackendHttp.request(path: '/api/threads/${widget.threadId}');
-      final bidsData =
-          await BackendHttp.request(path: '/api/threads/${widget.threadId}/bids');
+      final responses = await Future.wait([
+        BackendHttp.request(
+          path: '/api/threads/${widget.threadId}',
+          forceRefresh: true,
+        ),
+        BackendHttp.request(
+          path: '/api/threads/${widget.threadId}/bids',
+          forceRefresh: true,
+        ),
+      ]);
+      final threadData = responses[0];
+      final bidsData = responses[1];
 
       final thread = threadData['thread'] as Map<String, dynamic>?;
       final bidsRaw = bidsData['bids'];

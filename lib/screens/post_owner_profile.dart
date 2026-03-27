@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
-import 'dart:convert';
-import 'dart:io';
 import 'package:kora/model/thread_message.dart';
 import 'package:kora/model/user.dart';
 import 'package:kora/widgets/thread_message.dart';
 import 'package:kora/widgets/profile_avatar.dart';
 import 'package:kora/screens/comment_screen.dart';
-import 'package:kora/utils/backend_auth_service.dart';
-import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/backend_http.dart';
 import 'package:kora/app_localizations.dart';
 
 class PostOwnerProfileScreen extends StatefulWidget {
@@ -25,33 +22,8 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
   late Future<List<ThreadMessage>> threadsFuture;
   PanelController panelController = PanelController();
 
-  final BackendAuthService _authService = BackendAuthService();
-
-  Future<Map<String, dynamic>> _authedRequest(String path) async {
-    final token = await _authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-      return data;
-    } finally {
-      client.close(force: true);
-    }
-  }
-
   Future<UserModel> fetchUserData(String userId) async {
-    final data = await _authedRequest('/api/users/$userId');
+    final data = await BackendHttp.request(path: '/api/users/$userId');
     final user = (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
     return UserModel(
       id: (user['id'] ?? '').toString(),
@@ -74,7 +46,10 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
   }
 
   Future<List<ThreadMessage>> fetchUserThreads(UserModel user) async {
-    final data = await _authedRequest('/api/users/${user.id}/threads');
+    final data = await BackendHttp.request(
+      path: '/api/users/${user.id}/threads',
+      cacheTtl: const Duration(seconds: 20),
+    );
     final threads = (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map((messageData) {

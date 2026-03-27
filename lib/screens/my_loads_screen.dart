@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/app_localizations.dart';
-import 'package:kora/utils/backend_auth_service.dart';
-import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/backend_http.dart';
 
 class MyLoadsScreen extends StatefulWidget {
   final String cargoUserId;
@@ -17,7 +14,6 @@ class MyLoadsScreen extends StatefulWidget {
 
 class _MyLoadsScreenState extends State<MyLoadsScreen> {
   int _reloadToken = 0;
-  final BackendAuthService _authService = BackendAuthService();
 
   void _retry() {
     setState(() {
@@ -26,30 +22,14 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchLoads() async {
-    final token = await _authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw Exception('Not signed in');
-    }
-
-    final uri = Uri.parse('${BackendConfig.baseUrl}/api/threads?limit=100');
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(uri);
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      final res = await req.close();
-      final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
-      if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-        throw Exception((data['error'] ?? 'Request failed').toString());
-      }
-
-      return (data['threads'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .where((thread) => (thread['ownerId'] ?? '').toString() == widget.cargoUserId)
-          .toList();
-    } finally {
-      client.close(force: true);
-    }
+    final data = await BackendHttp.request(
+      path: '/api/users/${widget.cargoUserId}/threads',
+      cacheTtl: const Duration(seconds: 20),
+      forceRefresh: _reloadToken > 0,
+    );
+    return (data['threads'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
   }
 
   @override
