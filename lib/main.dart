@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:kora/app_localizations.dart';
 import 'package:kora/screens/auth_check.dart';
@@ -13,16 +14,38 @@ void main() {
   runApp(const ProviderScope(child: KoraApp()));
 }
 
-class KoraApp extends ConsumerWidget {
+class KoraApp extends ConsumerStatefulWidget {
   const KoraApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<KoraApp> createState() => _KoraAppState();
+}
+
+class _KoraAppState extends ConsumerState<KoraApp> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_restoreThemeMode);
+  }
+
+  Future<void> _restoreThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(themeModePreferenceKey);
+    if (!mounted) return;
+    ref.read(themeModeProvider.notifier).state = AppTheme.parseThemeMode(raw);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final locale = ref.watch(localeProvider);
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'kora',
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeMode,
       locale: locale,
       localizationsDelegates: const [
         AppLocalizations.delegate,
@@ -55,7 +78,6 @@ class KoraApp extends ConsumerWidget {
           );
         }
 
-        // Web deep link support
         if (name == '/' && Uri.base.path == '/reset-password') {
           final email = Uri.base.queryParameters['email'];
           final token = Uri.base.queryParameters['token'];
@@ -73,5 +95,3 @@ class KoraApp extends ConsumerWidget {
     );
   }
 }
-
-

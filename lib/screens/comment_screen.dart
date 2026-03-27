@@ -267,7 +267,7 @@ class _CommentScreenState extends State<CommentScreen> {
     final shipperImage = owner['profileImageUrl']?.toString();
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,

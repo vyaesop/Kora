@@ -77,7 +77,7 @@ class ThreadMessage {
       timestamp: DateTime.tryParse((map['timestamp'] ?? '').toString()) ?? DateTime.now(),
       likes: List<dynamic>.from(map['likes'] ?? const []),
       comments: List<dynamic>.from(map['comments'] ?? const []),
-      weight: (map['weight'] as num?)?.toDouble() ?? 0.0,
+      weight: (map['weight'] as num?)?.toDouble() ?? 0,
       type: (map['type'] ?? '').toString(),
       start: (map['start'] ?? '').toString(),
       end: (map['end'] ?? '').toString(),

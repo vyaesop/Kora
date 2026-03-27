@@ -67,7 +67,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchSuggestedLoads() async {
-    final data = await _authedRequest('/api/threads');
+    final data = await _authedRequest('/api/threads?limit=100');
     return (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where(
@@ -82,7 +82,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
     final acceptedIds = (widget.user.acceptedLoads ?? []).take(10).toSet();
     if (acceptedIds.isEmpty) return [];
 
-    final data = await _authedRequest('/api/threads');
+    final data = await _authedRequest('/api/threads?limit=100');
     return (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where((thread) => acceptedIds.contains((thread['id'] ?? '').toString()))

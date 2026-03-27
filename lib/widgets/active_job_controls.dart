@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:kora/utils/app_theme.dart';
 import 'package:kora/screens/track_driver_map_screen.dart';
 import 'package:kora/screens/shipment_chat_screen.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_config.dart';
 import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/delivery_status.dart';
 
 Future<Map<String, dynamic>> _authedRequest({
   required String path,
@@ -68,78 +70,228 @@ class ActiveJobControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final stages = const [
+      'accepted',
+      'driving_to_location',
+      'picked_up',
+      'on_the_road',
+      'delivered',
+    ];
+    final currentStageIndex = stages.indexOf(deliveryStatus);
+
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.blue[50],
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+      decoration: BoxDecoration(
+        color: isDark ? AppPalette.darkCard : Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFDBEAFE),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isShipper)
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TrackDriverMapScreen(
-                      driverId: driverId,
-                      loadId: threadId,
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppPalette.darkSurfaceRaised
+                      : Colors.white.withAlpha((0.74 * 255).round()),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.local_shipping_outlined,
+                  color: isDark ? AppPalette.accent : Colors.blue.shade700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Shipment actions',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.location_on),
-              label: Text(localizations.tr('trackDriver')),
-            ),
-          ElevatedButton.icon(
-            onPressed: () {
-              _launchMessage(context, isShipper ? carrierId : ownerId);
-            },
-            icon: const Icon(Icons.message),
-            label: Text(isShipper
-                ? localizations.tr('messageCarrier')
-                : localizations.tr('messageShipper')),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Current stage: ${deliveryStatusLabel(deliveryStatus)}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ShipmentChatScreen(
-                    threadId: threadId,
-                    peerId: isShipper ? carrierId : ownerId,
-                    peerLabel: isShipper
-                        ? AppLocalizations.of(context).tr('driverLabel')
-                        : AppLocalizations.of(context).tr('cargoLabel'),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: stages.asMap().entries.map((entry) {
+              final index = entry.key;
+              final status = entry.value;
+              final isActive = index <= currentStageIndex;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? (isDark
+                          ? AppPalette.accent.withAlpha((0.18 * 255).round())
+                          : Colors.blue.shade100)
+                      : (isDark
+                          ? AppPalette.darkSurfaceRaised
+                          : Colors.white.withAlpha((0.74 * 255).round())),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  deliveryStatusLabel(status),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isActive
+                        ? (isDark ? AppPalette.darkText : Colors.blue.shade900)
+                        : (isDark
+                            ? AppPalette.darkTextSoft
+                            : Colors.blueGrey.shade600),
                   ),
                 ),
               );
-            },
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: Text(localizations.tr('inAppChat')),
+            }).toList(),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              _launchCall(context, isShipper ? driverId : ownerId);
-            },
-            icon: const Icon(Icons.call),
-            label: Text(isShipper
-                ? localizations.tr('callDriver')
-                : localizations.tr('callShipper')),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (isShipper)
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => TrackDriverMapScreen(
+                          driverId: driverId,
+                          loadId: threadId,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.location_on),
+                  label: Text(localizations.tr('trackDriver')),
+                ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _launchMessage(context, isShipper ? carrierId : ownerId);
+                },
+                icon: const Icon(Icons.message),
+                label: Text(
+                  isShipper
+                      ? localizations.tr('messageCarrier')
+                      : localizations.tr('messageShipper'),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ShipmentChatScreen(
+                        threadId: threadId,
+                        peerId: isShipper ? carrierId : ownerId,
+                        peerLabel: isShipper
+                            ? AppLocalizations.of(context).tr('driverLabel')
+                            : AppLocalizations.of(context).tr('cargoLabel'),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: Text(localizations.tr('inAppChat')),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _launchCall(context, isShipper ? driverId : ownerId);
+                },
+                icon: const Icon(Icons.call),
+                label: Text(isShipper
+                    ? localizations.tr('callDriver')
+                    : localizations.tr('callShipper')),
+              ),
+              if (isShipper)
+                ElevatedButton.icon(
+                  onPressed: _canMarkDelivered(deliveryStatus)
+                      ? () => _completeDeliveryWithProof(context)
+                      : null,
+                  icon: const Icon(Icons.task_alt),
+                  label: Text(localizations.tr('markDelivered')),
+                ),
+              OutlinedButton.icon(
+                onPressed: () => _reportIssue(context),
+                icon: const Icon(Icons.report_problem_outlined),
+                label: Text(localizations.tr('reportIssue')),
+              ),
+            ],
           ),
-          if (isShipper)
-            ElevatedButton.icon(
-              onPressed: _canMarkDelivered(deliveryStatus)
-                  ? () => _completeDeliveryWithProof(context)
-                  : null,
-              icon: const Icon(Icons.task_alt),
-              label: Text(localizations.tr('markDelivered')),
+          if (isShipper && deliveryStatus == 'delivered') ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppPalette.darkSurfaceRaised : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color:
+                      isDark ? AppPalette.darkOutline : const Color(0xFFFDE68A),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.star_outline,
+                      color: Colors.amber.shade700, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Delivery complete. Leave a driver rating to close the loop.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => RatingDialog(
+                          driverId: driverId,
+                          bidId: bidId,
+                          ownerId: ownerId,
+                        ),
+                      );
+                    },
+                    child: Text(localizations.tr('rateDriver')),
+                  ),
+                ],
+              ),
             ),
-          OutlinedButton.icon(
-            onPressed: () => _reportIssue(context),
-            icon: const Icon(Icons.report_problem_outlined),
-            label: Text(localizations.tr('reportIssue')),
-          ),
+          ] else if (!isShipper && deliveryStatus == 'delivered') ...[
+            const SizedBox(height: 16),
+            Text(
+              'Delivery has been completed. The shipper can now leave a rating.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+              ),
+            ),
+          ],
         ],
       ),
     );

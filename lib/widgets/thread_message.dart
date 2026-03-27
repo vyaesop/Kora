@@ -32,6 +32,8 @@ class ThreadMessageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final localizations = AppLocalizations.of(context);
     final statusLabel =
         deliveryStatusLabel(message.deliveryStatus ?? 'pending_bids');
@@ -44,9 +46,11 @@ class ThreadMessageWidget extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF142033) : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF243247) : const Color(0xFFE5E7EB),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha((0.05 * 255).round()),
@@ -57,20 +61,6 @@ class ThreadMessageWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Container(
-            height: 3,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  statusColor.withAlpha((0.8 * 255).round()),
-                  statusColor.withAlpha((0.3 * 255).round())
-                ],
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(22),
-              ),
-            ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             child: Column(
@@ -95,7 +85,8 @@ class ThreadMessageWidget extends StatelessWidget {
                             style: GoogleFonts.spaceGrotesk(
                               fontWeight: FontWeight.w600,
                               fontSize: 14,
-                              color: const Color(0xFF0F172A),
+                              color:
+                                  isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -113,7 +104,7 @@ class ThreadMessageWidget extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withAlpha((0.12 * 255).round()),
+                    color: statusColor.withAlpha((0.12 * 255).round()),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
@@ -131,9 +122,12 @@ class ThreadMessageWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(
+                      color:
+                          isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +180,9 @@ class ThreadMessageWidget extends StatelessWidget {
                               style: GoogleFonts.spaceGrotesk(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: const Color(0xFF0F172A),
+                                color: isDark
+                                    ? const Color(0xFFE5EEF8)
+                                    : const Color(0xFF0F172A),
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -206,7 +202,9 @@ class ThreadMessageWidget extends StatelessWidget {
                               style: GoogleFonts.spaceGrotesk(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
-                                color: const Color(0xFF0F172A),
+                                color: isDark
+                                    ? const Color(0xFFE5EEF8)
+                                    : const Color(0xFF0F172A),
                               ),
                             ),
                           ],
@@ -222,7 +220,8 @@ class ThreadMessageWidget extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.manrope(
-                      color: Colors.grey.shade700,
+                      color:
+                          isDark ? const Color(0xFFCBD5E1) : Colors.grey.shade700,
                       fontSize: 13,
                     ),
                   ),
@@ -285,9 +284,15 @@ class ThreadMessageWidget extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.green.shade50,
+                          color: isDark
+                              ? Colors.green.withAlpha((0.16 * 255).round())
+                              : Colors.green.shade50,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.green.shade100),
+                          border: Border.all(
+                            color: isDark
+                                ? Colors.green.withAlpha((0.24 * 255).round())
+                                : Colors.green.shade100,
+                          ),
                         ),
                         child: Text(
                           localizations.tr('bidAlreadyPlaced'),

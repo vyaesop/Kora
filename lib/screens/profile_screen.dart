@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:kora/app_localizations.dart';
@@ -11,18 +12,19 @@ import 'package:kora/widgets/profile_avatar.dart';
 import 'package:kora/widgets/thread_message.dart';
 import 'comment_screen.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   static const String _pushNotificationsKey = 'profile_push_notifications';
   static const String _bidAlertsKey = 'profile_bid_alerts';
   static const String _loadMatchesKey = 'profile_load_matches';
   static const String _marketingUpdatesKey = 'profile_marketing_updates';
+  static const String _darkModeKey = 'profile_dark_mode';
 
   final _authService = BackendAuthService();
 
@@ -36,6 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _bidAlerts = true;
   bool _loadMatches = true;
   bool _marketingUpdates = false;
+  bool _darkMode = false;
 
   @override
   void initState() {
@@ -127,6 +130,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _bidAlerts = prefs.getBool(_bidAlertsKey) ?? true;
         _loadMatches = prefs.getBool(_loadMatchesKey) ?? true;
         _marketingUpdates = prefs.getBool(_marketingUpdatesKey) ?? false;
+        _darkMode = prefs.getBool(_darkModeKey) ??
+            (ref.read(themeModeProvider) == ThemeMode.dark);
         _loading = false;
       });
     } catch (e) {
@@ -169,14 +174,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _threadList(List<ThreadMessage> threads) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (threads.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? AppPalette.darkCard : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+          ),
         ),
         child: Text(AppLocalizations.of(context).tr('noItemsYet')),
       );
@@ -238,18 +246,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userType = (user['userType'] ?? 'Cargo').toString();
     final address = user['address']?.toString();
     final truckType = user['truckType']?.toString();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor =
+        isDark ? AppPalette.darkCard : Colors.white;
+    final cardBorder = isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB);
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(localizations.tr('profile')),
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: localizations.tr('logout'),
+          TextButton.icon(
             onPressed: _signOut,
+            icon: const Icon(Icons.logout),
+            label: Text(localizations.tr('logout')),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red.shade400,
+            ),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
@@ -345,6 +361,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 10),
             _InfoCard(
+              color: cardColor,
+              borderColor: cardBorder,
               children: [
                 _InfoRow(label: localizations.tr('typeLabel'), value: userType),
                 if (address != null && address.isNotEmpty)
@@ -361,7 +379,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 10),
             _InfoCard(
+              color: cardColor,
+              borderColor: cardBorder,
               children: [
+                _SettingsTile(
+                  title: 'Dark mode',
+                  subtitle: 'Use a high-contrast dark appearance across the app.',
+                  value: _darkMode,
+                  onChanged: (value) async {
+                    setState(() => _darkMode = value);
+                    await _updatePreference(_darkModeKey, value);
+                    ref.read(themeModeProvider.notifier).state =
+                        value ? ThemeMode.dark : ThemeMode.light;
+                  },
+                ),
                 _SettingsTile(
                   title: 'Push notifications',
                   subtitle: 'General reminders and important account activity.',
@@ -522,8 +553,14 @@ class _ProfileMetricCard extends StatelessWidget {
 
 class _InfoCard extends StatelessWidget {
   final List<Widget> children;
+  final Color color;
+  final Color borderColor;
 
-  const _InfoCard({required this.children});
+  const _InfoCard({
+    required this.children,
+    required this.color,
+    required this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -531,9 +568,9 @@ class _InfoCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: color,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(children: children),
     );

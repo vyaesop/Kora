@@ -1,15 +1,18 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:kora/utils/delivery_status.dart';
-import 'package:kora/utils/error_handler.dart';
+import 'package:flutter/material.dart';
+
 import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/error_handler.dart';
 
 class TrackLoadsScreen extends StatefulWidget {
   final bool showBack;
+
   const TrackLoadsScreen({super.key, this.showBack = true});
 
   @override
@@ -21,9 +24,7 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
   final BackendAuthService _authService = BackendAuthService();
 
   void _retry() {
-    setState(() {
-      _reloadToken++;
-    });
+    setState(() => _reloadToken++);
   }
 
   Future<List<Map<String, dynamic>>> _fetchMyLoads() async {
@@ -33,23 +34,23 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
       throw Exception('Not signed in');
     }
 
-    final uri = Uri.parse('${BackendConfig.baseUrl}/api/threads');
+    final uri = Uri.parse('${BackendConfig.baseUrl}/api/threads?limit=100');
     final client = HttpClient();
     try {
       final req = await client.getUrl(uri);
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       final res = await req.close();
       final raw = await utf8.decoder.bind(res).join();
-      final data = raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
+      final data =
+          raw.isEmpty ? <String, dynamic>{} : jsonDecode(raw) as Map<String, dynamic>;
       if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
         throw Exception((data['error'] ?? 'Request failed').toString());
       }
 
-      final list = (data['threads'] as List<dynamic>? ?? const [])
+      return (data['threads'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
           .where((thread) => (thread['ownerId'] ?? '').toString() == userId)
           .toList();
-      return list;
     } finally {
       client.close(force: true);
     }
@@ -86,11 +87,11 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
       final req = await client.openUrl('DELETE', uri);
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       final res = await req.close();
-      
+
       if (res.statusCode < 200 || res.statusCode >= 300) {
         throw Exception('Failed to delete load');
       }
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context).tr('loadDeleted'))),
@@ -99,28 +100,49 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).tr('error')}: ${ErrorHandler.getMessage(e)}')),
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context).tr('error')}: ${ErrorHandler.getMessage(e)}',
+          ),
+        ),
       );
+    }
+  }
+
+  Color _statusColor(String rawStatus) {
+    switch (rawStatus.toLowerCase()) {
+      case 'pending_bids':
+        return Colors.orange;
+      case 'accepted':
+      case 'driving_to_location':
+      case 'picked_up':
+      case 'on_the_road':
+        return Colors.blue;
+      case 'delivered':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.blueGrey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         leading: widget.showBack
             ? IconButton(
                 tooltip: localizations.tr('back'),
-                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                icon: const Icon(Icons.arrow_back),
                 onPressed: () => Navigator.pop(context),
               )
             : null,
-        title: Text(localizations.tr('activeLoads')),
+        title: Text(localizations.tr('myLoads')),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         key: ValueKey(_reloadToken),
@@ -138,7 +160,6 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
                     Text(
                       ErrorHandler.getMessage(snapshot.error!),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.black87),
                     ),
                     const SizedBox(height: 16),
                     TextButton.icon(
@@ -151,9 +172,11 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
               ),
             );
           }
+
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
+
           final loads = snapshot.data ?? const <Map<String, dynamic>>[];
           if (loads.isEmpty) {
             return Center(
@@ -162,6 +185,9 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(Icons.inventory_2_outlined,
+                        size: 56, color: Colors.grey.shade400),
+                    const SizedBox(height: 12),
                     Text(localizations.tr('noLoadsPosted')),
                     const SizedBox(height: 8),
                     TextButton.icon(
@@ -174,54 +200,231 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
               ),
             );
           }
-          return ListView.builder(
-            itemCount: loads.length,
-            itemBuilder: (context, index) {
-                  final load = loads[index];
-                  final bidCount = (load['bids'] as List<dynamic>?)?.length ??
-                      ((load['bids_count'] as num?)?.toInt() ?? 0);
-                  final title = (load['description'] ?? load['message'] ?? '').toString().trim();
-                  final end = (load['end'] ?? load['destination'] ?? load['endCity'] ?? 'Unknown destination').toString();
-                  final status = deliveryStatusLabel((load['deliveryStatus'] ?? 'pending_bids').toString());
-                  final pickupText = (load['pickupWindowStart'] ?? 'N/A').toString();
-                  final deliveryText = (load['deliveryWindowEnd'] ?? 'N/A').toString();
 
-                  final loadId = (load['id'] ?? '').toString();
+          final activeCount = loads
+              .where((load) => (load['deliveryStatus'] ?? '').toString() != 'delivered')
+              .length;
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: ListTile(
-                      title: Text(title.isEmpty
-                          ? '${localizations.tr('loadIndex')} ${index + 1}'
-                          : title),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text('${localizations.tr('to')}: $end'),
-                          Text('${localizations.tr('status')}: $status'),
-                          Text('${localizations.tr('pickup')}: $pickupText'),
-                          Text('${localizations.tr('delivery')}: $deliveryText'),
-                        ],
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('$bidCount ${localizations.tr('bidsCount')}'),
-                          const SizedBox(width: 8),
-                          if (status.toLowerCase() != 'completed' && status.toLowerCase() != 'cancelled')
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _deleteLoad(loadId),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: isDark
+                      ? AppPalette.heroGradientDark
+                      : AppPalette.heroGradient,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'My loads',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
                           ),
-                        ],
-                      ),
-                      isThreeLine: true,
                     ),
-                  );
-            },
+                    const SizedBox(height: 6),
+                    Text(
+                      'Keep an eye on active shipments, bid activity, and delivery progress from one screen.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white70,
+                            height: 1.45,
+                          ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _HeroStat(label: 'Total', value: '${loads.length}'),
+                        _HeroStat(label: 'Active', value: '$activeCount'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...loads.map((load) {
+                final bidCount = (load['bids'] as List<dynamic>?)?.length ??
+                    ((load['bids_count'] as num?)?.toInt() ?? 0);
+                final title =
+                    (load['description'] ?? load['message'] ?? '').toString().trim();
+                final start = (load['start'] ?? load['startCity'] ?? 'Unknown origin')
+                    .toString();
+                final end =
+                    (load['end'] ?? load['endCity'] ?? 'Unknown destination')
+                        .toString();
+                final rawStatus =
+                    (load['deliveryStatus'] ?? 'pending_bids').toString();
+                final status = deliveryStatusLabel(rawStatus);
+                final weight = (load['weight'] ?? '-').toString();
+                final unit = (load['weightUnit'] ?? 'kg').toString();
+                final loadId = (load['id'] ?? '').toString();
+                final statusColor = _statusColor(rawStatus);
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppPalette.darkCard : Colors.white,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: isDark
+                            ? AppPalette.darkOutline
+                            : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title.isEmpty
+                                        ? '${localizations.tr('loadIndex')} ${loads.indexOf(load) + 1}'
+                                        : title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '$start -> $end',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: isDark
+                                              ? AppPalette.darkTextSoft
+                                              : Colors.black54,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: statusColor.withAlpha((0.12 * 255).round()),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                status,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            _MetaPill(label: '$weight $unit'),
+                            const SizedBox(width: 8),
+                            _MetaPill(
+                                label:
+                                    '$bidCount ${localizations.tr('bidsCount')}'),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            if (rawStatus != 'delivered' && rawStatus != 'cancelled')
+                              TextButton.icon(
+                                onPressed: () => _deleteLoad(loadId),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red.shade400,
+                                ),
+                                icon: const Icon(Icons.delete_outline),
+                                label: Text(localizations.tr('delete')),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HeroStat({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha((0.12 * 255).round()),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  final String label;
+
+  const _MetaPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }

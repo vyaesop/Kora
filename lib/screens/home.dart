@@ -170,8 +170,8 @@ class _HomeState extends State<Home> {
           label: localizations.tr('post'),
         ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.location_on),
-            label: localizations.tr('track')),
+            icon: const Icon(Icons.inventory_2_outlined),
+            label: localizations.tr('myLoads')),
         BottomNavigationBarItem(
             icon: const Icon(Icons.person), label: localizations.tr('profile')),
       ];

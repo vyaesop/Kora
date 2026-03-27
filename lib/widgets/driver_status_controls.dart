@@ -1,13 +1,17 @@
-import 'package:flutter/material.dart';
 import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:kora/utils/firestore_service.dart';
-import 'package:kora/utils/delivery_status.dart';
+
 import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/app_theme.dart';
+import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/firestore_service.dart';
 
 class DriverStatusControls extends StatefulWidget {
   final String threadId;
   final String currentStatus;
+
   const DriverStatusControls({
     super.key,
     required this.threadId,
@@ -27,13 +31,6 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
         'picked_up',
         'on_the_road',
         'delivered',
-      ];
-
-  List<String> get _labels => const [
-        'Driving to Location',
-        'Picked Up',
-        'On the Road',
-        'Delivered',
       ];
 
   @override
@@ -115,20 +112,19 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
         final localizations = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(
-                      '${localizations.tr('statusUpdatedTo')} ${deliveryStatusLabel(status)}.')),
+            content: Text(
+              '${localizations.tr('statusUpdatedTo')} ${deliveryStatusLabel(status)}.',
+            ),
+          ),
         );
       }
       await _flushQueuedUpdates();
-    } catch (e) {
+    } catch (_) {
       await _queueStatusUpdate(status);
       if (mounted) {
         final localizations = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  localizations.tr('offlineStatusQueued'))),
+          SnackBar(content: Text(localizations.tr('offlineStatusQueued'))),
         );
       }
     } finally {
@@ -139,64 +135,155 @@ class _DriverStatusControlsState extends State<DriverStatusControls> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final normalized = normalizeStatus(widget.currentStatus);
+    final baseIndex = normalized == 'accepted' ? -1 : _statuses.indexOf(normalized);
+    final currentIndex = baseIndex < 0 ? 0 : baseIndex;
+    final nextIndex = normalized == 'accepted' ? 0 : baseIndex + 1;
+    final nextStatus =
+        nextIndex >= 0 && nextIndex < _statuses.length ? _statuses[nextIndex] : null;
+    final progress = normalized == 'accepted'
+        ? 0.0
+        : (currentIndex + 1) / _statuses.length;
 
-    // Accepted means first actionable state is "driving_to_location".
-    final baseIndex =
-        normalized == 'accepted' ? -1 : _statuses.indexOf(normalized);
-    int currentIndex = baseIndex;
-    final bool unknownStatus = currentIndex < 0;
-
-    if (unknownStatus && normalized != 'accepted') {
-      // Log unexpected status for debugging
-      debugPrint(
-          'Warning: unknown delivery status "${widget.currentStatus}" for thread ${widget.threadId}');
-      // Clamp progress to 0 so indicator doesn't break
-      currentIndex = 0;
-    }
-
-    final progress =
-        normalized == 'accepted' ? 0.0 : (currentIndex + 1) / _statuses.length;
-
-    return Column(
-      children: [
-        LinearProgressIndicator(
-          value: progress.clamp(0.0, 1.0),
-          minHeight: 8,
-          backgroundColor: Colors.grey[300],
-          color: Colors.blue,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppPalette.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
         ),
-        const SizedBox(height: 8),
-        Text(
-          unknownStatus
-              ? '${localizations.tr('currentStatusLabel')}: ${deliveryStatusLabel(widget.currentStatus)}'
-              : (normalized == 'accepted'
-                  ? '${localizations.tr('currentStatusLabel')}: ${deliveryStatusLabel('accepted')}'
-                  : '${localizations.tr('currentStatusLabel')}: ${_labels[currentIndex]}'),
-          style:
-              const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
-        ),
-        ...List.generate(_statuses.length, (i) {
-          final canTap =
-              normalized == 'accepted' ? i == 0 : i == (baseIndex + 1);
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
-            child: ElevatedButton(
-              onPressed:
-                  _updating || !canTap ? null : () => _setStatus(_statuses[i]),
-              child: _updating && canTap
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(_labels[i]),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Driver delivery updates',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
             ),
-          );
-        }),
-      ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${localizations.tr('currentStatusLabel')}: ${deliveryStatusLabel(widget.currentStatus)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 10,
+              backgroundColor:
+                  isDark ? AppPalette.darkSurfaceRaised : Colors.grey.shade200,
+              color: AppPalette.accent,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _statuses.asMap().entries.map((entry) {
+              final index = entry.key;
+              final status = entry.value;
+              final isActive = index <= currentIndex;
+              final isNext = nextStatus == status;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? (isDark
+                          ? AppPalette.accent.withAlpha((0.16 * 255).round())
+                          : Colors.blue.shade50)
+                      : (isDark
+                          ? AppPalette.darkSurfaceRaised
+                          : Colors.grey.shade100),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isNext
+                        ? AppPalette.accent
+                        : (isDark
+                            ? AppPalette.darkOutline
+                            : Colors.grey.shade200),
+                  ),
+                ),
+                child: Text(
+                  deliveryStatusLabel(status),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: isActive
+                        ? (isDark ? AppPalette.darkText : Colors.blue.shade900)
+                        : (isDark
+                            ? AppPalette.darkTextSoft
+                            : Colors.blueGrey.shade600),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          if (nextStatus != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: isDark ? AppPalette.darkSurfaceRaised : Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Next milestone',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    deliveryStatusLabel(nextStatus),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          _updating ? null : () => _setStatus(nextStatus),
+                      icon: _updating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.check_circle_outline),
+                      label: Text(
+                        _updating
+                            ? localizations.tr('refreshing')
+                            : 'Update to ${deliveryStatusLabel(nextStatus)}',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              'All delivery stages are complete.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
-

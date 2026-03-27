@@ -31,7 +31,7 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
       throw Exception('Not signed in');
     }
 
-    final uri = Uri.parse('${BackendConfig.baseUrl}/api/threads');
+    final uri = Uri.parse('${BackendConfig.baseUrl}/api/threads?limit=100');
     final client = HttpClient();
     try {
       final req = await client.getUrl(uri);

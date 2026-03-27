@@ -69,7 +69,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchLoads() async {
-    final data = await _authedRequest('/api/threads');
+    final data = await _authedRequest('/api/threads?limit=100');
     return (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where((thread) => (thread['ownerId'] ?? '').toString() == widget.user.id)
@@ -135,8 +135,8 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                 primaryLabel: localizations.tr('postALoad'),
                 primaryIcon: Icons.add_circle_outline,
                 onPrimaryTap: widget.onPostLoad,
-                secondaryLabel: localizations.tr('track'),
-                secondaryIcon: Icons.location_on_outlined,
+                secondaryLabel: localizations.tr('myLoads'),
+                secondaryIcon: Icons.inventory_2_outlined,
                 onSecondaryTap: () => widget.onSelectTab(3),
                 metrics: [
                   _HeroMetricData(
@@ -295,8 +295,8 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                   label: localizations.tr('post'),
                 ),
                 BottomNavigationBarItem(
-                  icon: const Icon(Icons.location_on_outlined),
-                  label: localizations.tr('track'),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: localizations.tr('myLoads'),
                 ),
                 BottomNavigationBarItem(
                   icon: const Icon(Icons.person_outline),

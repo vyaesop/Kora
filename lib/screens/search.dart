@@ -305,13 +305,17 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildFilters(AppLocalizations localizations) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color: _card,
+        color: isDark ? AppPalette.darkCard : _card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha((0.04 * 255).round()),
@@ -330,7 +334,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 style: GoogleFonts.spaceGrotesk(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: _ink,
+                  color: isDark ? AppPalette.darkText : _ink,
                 ),
               ),
               const Spacer(),
@@ -342,7 +346,8 @@ class _SearchScreenState extends State<SearchScreen> {
                         ? localizations.tr('cancel')
                         : localizations.tr('viewAll'),
                     style: GoogleFonts.manrope(
-                      color: Colors.grey.shade700,
+                      color:
+                          isDark ? AppPalette.darkTextSoft : Colors.grey.shade700,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -360,7 +365,9 @@ class _SearchScreenState extends State<SearchScreen> {
               style: GoogleFonts.manrope(fontSize: 14),
               decoration: InputDecoration(
                 hintText: localizations.tr('searchHint'),
-                hintStyle: GoogleFonts.manrope(color: Colors.grey.shade500),
+                hintStyle: GoogleFonts.manrope(
+                  color: isDark ? AppPalette.darkTextSoft : Colors.grey.shade500,
+                ),
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _hasSearch
                     ? IconButton(
@@ -369,7 +376,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       )
                     : null,
                 filled: true,
-                fillColor: const Color(0xFFF8FAFC),
+                fillColor:
+                    isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 border: OutlineInputBorder(
@@ -399,7 +407,9 @@ class _SearchScreenState extends State<SearchScreen> {
                   selectedColor: const Color(0xFFE0F2FE),
                   backgroundColor: const Color(0xFFF1F5F9),
                   labelStyle: GoogleFonts.manrope(
-                    color: selected ? const Color(0xFF0B3B82) : _inkSoft,
+                    color: selected
+                        ? const Color(0xFF0B3B82)
+                        : (isDark ? AppPalette.darkText : _inkSoft),
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   ),
                   shape: RoundedRectangleBorder(
@@ -421,10 +431,15 @@ class _SearchScreenState extends State<SearchScreen> {
                 },
                 labelStyle: GoogleFonts.manrope(
                   fontWeight: FontWeight.w600,
-                  color: _showClosed ? _ink : Colors.grey.shade700,
+                  color: _showClosed
+                      ? (isDark ? AppPalette.darkText : _ink)
+                      : (isDark
+                          ? AppPalette.darkTextSoft
+                          : Colors.grey.shade700),
                 ),
                 selectedColor: const Color(0xFFEFF6FF),
-                backgroundColor: const Color(0xFFF8FAFC),
+                backgroundColor:
+                    isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
                 avatar: Icon(
                   _showClosed ? Icons.check_circle : Icons.circle_outlined,
                   size: 18,
@@ -442,7 +457,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       : localizations.tr('showingOpenOnly'),
                   textAlign: TextAlign.right,
                   style: GoogleFonts.manrope(
-                    color: Colors.grey.shade600,
+                    color:
+                        isDark ? AppPalette.darkTextSoft : Colors.grey.shade600,
                     fontSize: 12,
                   ),
                 ),
@@ -461,7 +477,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final bottomSpacing = MediaQuery.of(context).padding.bottom + 116.0;
 
     return Scaffold(
-      backgroundColor: _surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SlidingUpPanel(
         controller: _panelController,
         minHeight: 0,
