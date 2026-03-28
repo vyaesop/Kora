@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../utils/app_theme.dart';
+import '../utils/formatters.dart';
+
 class AgreedPriceBanner extends StatelessWidget {
   final double finalPrice;
   final String currency;
@@ -12,13 +15,16 @@ class AgreedPriceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: isDark ? const Color(0xFF0F2A1A) : Colors.green.shade50,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(
+          color: isDark ? const Color(0xFF1F5B36) : Colors.green.shade200,
+        ),
       ),
       child: Row(
         children: [
@@ -26,10 +32,10 @@ class AgreedPriceBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Agreed Price: ${finalPrice.toStringAsFixed(2)} $currency',
-              style: const TextStyle(
+              'Agreed Price: ${formatPrice(finalPrice, currency)}',
+              style: TextStyle(
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: isDark ? AppPalette.darkText : Colors.black87,
               ),
             ),
           ),

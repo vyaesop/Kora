@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import 'dart:async';
 
 import 'package:kora/app_localizations.dart';
+import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 
 class DriverLocationSnapshot {
@@ -124,13 +125,11 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(localizations.tr('trackDriver')),
@@ -222,7 +221,9 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
                     left: 12,
                     right: 12,
                     child: Card(
-                      color: stale ? Colors.orange.shade50 : Colors.white,
+                      color: stale
+                          ? (isDark ? const Color(0xFF3A2A12) : Colors.orange.shade50)
+                          : (isDark ? AppPalette.darkCard : Colors.white),
                       child: Padding(
                         padding: const EdgeInsets.all(10.0),
                         child: Column(
@@ -262,7 +263,9 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
                               style: TextStyle(
                                 color: nearingDestination
                                     ? Colors.green
-                                    : Colors.black87,
+                                    : (isDark
+                                        ? AppPalette.darkText
+                                        : Colors.black87),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

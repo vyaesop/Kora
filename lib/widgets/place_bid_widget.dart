@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 
+import '../utils/app_theme.dart';
 import '../utils/backend_http.dart';
+import '../utils/formatters.dart';
 import '../app_localizations.dart';
 
 class PlaceBidWidget extends StatefulWidget {
@@ -140,8 +142,9 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      color: Colors.white,
+      color: isDark ? AppPalette.darkCard : Colors.white,
       padding: const EdgeInsets.all(12),
       child: _loadingExistingBid
           ? const Padding(
@@ -159,7 +162,7 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
+                  color: isDark ? const Color(0xFF3A2A12) : Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -191,17 +194,19 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
               width: double.infinity,
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: isDark
+                    ? AppPalette.darkSurfaceRaised
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                      '${localizations.tr('estimatedPlatformFee')}: ${_estimatedFee.toStringAsFixed(2)} ${widget.currency}'),
+                      '${localizations.tr('estimatedPlatformFee')}: ${formatPrice(_estimatedFee, widget.currency)}'),
                   const SizedBox(height: 4),
                   Text(
-                    '${localizations.tr('estimatedNetPayout')}: ${_estimatedNet.toStringAsFixed(2)} ${widget.currency}',
+                    '${localizations.tr('estimatedNetPayout')}: ${formatPrice(_estimatedNet, widget.currency)}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],

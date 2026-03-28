@@ -37,12 +37,9 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
     final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         leading: IconButton(
           tooltip: localizations.tr('back'),
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(localizations.tr('myLoads')),

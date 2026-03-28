@@ -88,12 +88,12 @@ class BackendTransport {
     final req = await _client.openUrl(method, uri);
     req.headers.set(HttpHeaders.acceptHeader, 'application/json');
     req.headers.set(HttpHeaders.acceptEncodingHeader, 'gzip');
+    if (token != null && token.isNotEmpty) {
+      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+    }
     if (body != null) {
       req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
       req.add(utf8.encode(jsonEncode(body)));
-    }
-    if (token != null && token.isNotEmpty) {
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
     }
 
     final res = await req.close();

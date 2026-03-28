@@ -8,6 +8,7 @@ import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/utils/error_handler.dart';
+import 'package:kora/utils/formatters.dart';
 
 class TrackLoadsScreen extends StatefulWidget {
   final bool showBack;
@@ -318,7 +319,10 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
                         statusLabel: status,
                         statusColor: statusColor,
                         weight: threadMessage.weight > 0
-                            ? '${threadMessage.weight} ${threadMessage.weightUnit}'
+                            ? formatWeight(
+                                threadMessage.weight,
+                                threadMessage.weightUnit,
+                              )
                             : 'Weight pending',
                         bidCount: bidCount,
                         updatedAt:

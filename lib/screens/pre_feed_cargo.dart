@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:kora/app_localizations.dart';
+import 'package:kora/model/thread_message.dart';
 import 'package:kora/model/user.dart';
+import 'package:kora/screens/comment_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/formatters.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
 class PreFeedCargoScreen extends StatefulWidget {
@@ -60,18 +63,64 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
         .toList();
   }
 
+  ThreadMessage _threadMessageFromMap(Map<String, dynamic> row) {
+    final owner = row['owner'] as Map<String, dynamic>? ?? const {};
+    final createdRaw = row['createdAt']?.toString();
+    final createdAt = createdRaw == null
+        ? DateTime.now()
+        : DateTime.tryParse(createdRaw) ?? DateTime.now();
+
+    return ThreadMessage(
+      id: (row['id'] ?? '').toString(),
+      docId: (row['id'] ?? '').toString(),
+      senderName: (owner['name'] ?? widget.user.name).toString(),
+      senderProfileImageUrl:
+          (owner['profileImageUrl'] ?? widget.user.profileImageUrl ?? '')
+              .toString(),
+      message: (row['message'] ?? '').toString(),
+      timestamp: createdAt,
+      likes: const [],
+      comments: const [],
+      weight: (row['weight'] as num?)?.toDouble() ?? 0.0,
+      type: (row['type'] ?? '').toString(),
+      start: (row['start'] ?? '').toString(),
+      end: (row['end'] ?? '').toString(),
+      packaging: (row['packaging'] ?? '').toString(),
+      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
+      startLat: (row['startLat'] as num?)?.toDouble() ?? 0.0,
+      startLng: (row['startLng'] as num?)?.toDouble() ?? 0.0,
+      endLat: (row['endLat'] as num?)?.toDouble() ?? 0.0,
+      endLng: (row['endLng'] as num?)?.toDouble() ?? 0.0,
+      deliveryStatus: row['deliveryStatus']?.toString(),
+    );
+  }
+
+  void _openLoadDetails(BuildContext context, Map<String, dynamic> row) {
+    final threadId = (row['id'] ?? '').toString();
+    if (threadId.isEmpty) {
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CommentScreen(
+          threadId: threadId,
+          message: _threadMessageFromMap(row),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: AppPalette.surface,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: widget.embedded
           ? null
           : AppBar(
-              elevation: 0,
-              backgroundColor: AppPalette.card,
-              foregroundColor: AppPalette.ink,
               automaticallyImplyLeading: false,
               title: Text('${localizations.tr('welcome')}, ${widget.user.name}'),
               actions: const [
@@ -186,17 +235,18 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                       final data = docs[index];
                       final start = (data['start'] ?? 'Unknown').toString();
                       final end = (data['end'] ?? 'Unknown').toString();
-                      final weight = data['weight']?.toString() ?? '-';
                       final unit = (data['weightUnit'] ?? 'kg').toString();
+                      final weight = (data['weight'] as num?)?.toDouble();
                       final status =
                           (data['deliveryStatus'] ?? 'pending_bids').toString();
                       return _LoadCard(
                         title: '$start -> $end',
                         subtitle:
-                            '${localizations.tr('weight')}: $weight $unit',
+                            '${localizations.tr('weight')}: ${weight == null ? '-' : formatWeight(weight, unit)}',
                         trailing: _StatusPill(status: status),
                         footer:
                             '${localizations.tr('status')}: ${deliveryStatusLabel(status)}',
+                        onTap: () => _openLoadDetails(context, data),
                       );
                     },
                   );
@@ -252,8 +302,10 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
           ? null
           : BottomNavigationBar(
               currentIndex: 0,
-              selectedItemColor: AppPalette.ink,
-              unselectedItemColor: Colors.grey,
+              selectedItemColor:
+                  isDark ? AppPalette.darkText : AppPalette.ink,
+              unselectedItemColor:
+                  isDark ? AppPalette.darkTextSoft : Colors.grey,
               showSelectedLabels: true,
               showUnselectedLabels: true,
               type: BottomNavigationBarType.fixed,
@@ -472,6 +524,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -486,7 +539,7 @@ class _SectionHeader extends StatelessWidget {
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.black54,
+                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
               ),
         ),
       ],
@@ -509,18 +562,23 @@ class _QuickActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Ink(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppPalette.card,
+          color: isDark ? AppPalette.darkCard : AppPalette.card,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(
+            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha((0.04 * 255).round()),
+              color: Colors.black.withAlpha(
+                ((isDark ? 0.12 : 0.04) * 255).round(),
+              ),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),
@@ -549,7 +607,7 @@ class _QuickActionCard extends StatelessWidget {
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.black54,
+                    color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                     height: 1.4,
                   ),
             ),
@@ -565,62 +623,75 @@ class _LoadCard extends StatelessWidget {
   final String subtitle;
   final String footer;
   final Widget trailing;
+  final VoidCallback? onTap;
 
   const _LoadCard({
     required this.title,
     required this.subtitle,
     required this.footer,
     required this.trailing,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppPalette.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.black54,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              trailing,
-            ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppPalette.darkCard : AppPalette.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
           ),
-          const SizedBox(height: 14),
-          Text(
-            footer,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: const Color(0xFF475569),
-                  fontWeight: FontWeight.w600,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        subtitle,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: isDark
+                                  ? AppPalette.darkTextSoft
+                                  : Colors.black54,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
-          ),
-        ],
+                const SizedBox(width: 12),
+                trailing,
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              footer,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isDark
+                        ? AppPalette.darkTextSoft
+                        : const Color(0xFF475569),
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -633,6 +704,7 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final normalized = status.toLowerCase();
     final color = normalized == 'pending_bids'
         ? Colors.orange
@@ -642,7 +714,7 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withAlpha((0.12 * 255).round()),
+        color: color.withAlpha(((isDark ? 0.24 : 0.12) * 255).round()),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
@@ -664,10 +736,11 @@ class _RatingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFBEB),
+        color: isDark ? const Color(0xFF3A2A12) : const Color(0xFFFFFBEB),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
@@ -709,13 +782,16 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppPalette.card,
+        color: isDark ? AppPalette.darkCard : AppPalette.card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,7 +806,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             subtitle,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.black54,
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                 ),
           ),
           if (buttonText != null && onTap != null) ...[

@@ -6,6 +6,7 @@ import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/firestore_service.dart';
+import 'package:kora/utils/formatters.dart';
 
 class MyBidsScreen extends StatefulWidget {
   const MyBidsScreen({super.key});
@@ -296,9 +297,10 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                     final status = (bid['status'] ?? 'pending').toString();
                     final threadId = (thread['id'] ?? '').toString();
                     final threadMessage = _threadToMessage(thread);
-                    final weight =
-                        '${threadMessage.weight.toStringAsFixed(threadMessage.weight.truncateToDouble() == threadMessage.weight ? 0 : 1)} ${threadMessage.weightUnit}'
-                            .trim();
+                    final weight = formatWeight(
+                      threadMessage.weight,
+                      threadMessage.weightUnit,
+                    );
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -308,8 +310,7 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                             : threadMessage.message,
                         start: threadMessage.start,
                         end: threadMessage.end,
-                        amount:
-                            '${amount.toStringAsFixed(2)} $currency',
+                        amount: formatPrice(amount, currency),
                         statusLabel: _statusLabel(status),
                         statusColor: _statusColor(status),
                         meta: [

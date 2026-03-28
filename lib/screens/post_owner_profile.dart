@@ -96,11 +96,8 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
     final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(localizations.tr('profile')),

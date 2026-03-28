@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../utils/app_theme.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_http.dart';
 import '../utils/error_handler.dart';
@@ -176,11 +177,9 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         title: Text('${localizations.tr('chat')} • ${widget.peerLabel}'),
       ),
       body: Column(
@@ -225,7 +224,9 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
                                   decoration: BoxDecoration(
                                     color: isMine
                                         ? Colors.blue.shade600
-                                        : Colors.grey.shade200,
+                                        : (isDark
+                                            ? AppPalette.darkSurfaceRaised
+                                            : Colors.grey.shade200),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
@@ -233,7 +234,9 @@ class _ShipmentChatScreenState extends State<ShipmentChatScreen> {
                                     style: TextStyle(
                                         color: isMine
                                             ? Colors.white
-                                            : Colors.black87),
+                                            : (isDark
+                                                ? AppPalette.darkText
+                                                : Colors.black87)),
                                   ),
                                 ),
                               );

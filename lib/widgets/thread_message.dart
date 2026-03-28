@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../model/thread_message.dart';
-import 'profile_avatar.dart';
-import '../utils/delivery_status.dart';
 import '../app_localizations.dart';
+import '../model/thread_message.dart';
+import '../utils/app_theme.dart';
+import '../utils/delivery_status.dart';
+import '../utils/formatters.dart';
+import 'profile_avatar.dart';
 
 class ThreadMessageWidget extends StatelessWidget {
   final ThreadMessage message;
@@ -59,214 +61,233 @@ class ThreadMessageWidget extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: onProfileTap,
-                      child: ProfileAvatar(
-                        radius: 18,
-                        imageUrl: message.senderProfileImageUrl,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            senderName,
-                            style: GoogleFonts.spaceGrotesk(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color:
-                                  isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${localizations.tr('lastUpdated')} - $relativeTime',
-                            style: GoogleFonts.manrope(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                    color: statusColor.withAlpha((0.12 * 255).round()),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: GoogleFonts.manrope(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color:
-                          isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final compact = constraints.maxWidth < 340;
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _routeStop(
-                              isDark: isDark,
-                              label: localizations.tr('pickup'),
-                              value: message.start,
-                              icon: Icons.trip_origin,
-                              accentColor: statusColor,
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: compact ? 8 : 12,
-                              vertical: compact ? 14 : 18,
-                            ),
-                            child: _RouteConnector(
-                              color: statusColor,
-                              isDark: isDark,
-                              compact: compact,
-                            ),
-                          ),
-                          Expanded(
-                            child: _routeStop(
-                              isDark: isDark,
-                              label: localizations.tr('delivery'),
-                              value: message.end,
-                              icon: Icons.location_on_outlined,
-                              accentColor: const Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                GestureDetector(
+                  onTap: onProfileTap,
+                  child: ProfileAvatar(
+                    radius: 18,
+                    imageUrl: message.senderProfileImageUrl,
                   ),
                 ),
-                if (message.message.trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    message.message,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.manrope(
-                      color:
-                          isDark ? const Color(0xFFCBD5E1) : Colors.grey.shade700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _tag(
-                      icon: Icons.scale_outlined,
-                      label: '${message.weight} ${message.weightUnit}'.trim(),
-                    ),
-                    _tag(
-                      icon: Icons.category_outlined,
-                      label: message.type.isEmpty
-                          ? localizations.tr('searchGeneral')
-                          : message.type,
-                    ),
-                    if (message.packaging.isNotEmpty)
-                      _tag(
-                        icon: Icons.inventory_2_outlined,
-                        label: message.packaging,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(Icons.touch_app_outlined,
-                        size: 16, color: Colors.grey.shade500),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        localizations.tr('tapForDetails'),
-                        style: GoogleFonts.manrope(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    if (showBidButton)
-                      ElevatedButton.icon(
-                        onPressed: onComment,
-                        icon: const Icon(Icons.local_offer_outlined, size: 16),
-                        label: Text(localizations.tr('bid')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0EA5E9),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                      )
-                    else if (showBidStatusWhenHidden)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        senderName,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
                           color: isDark
-                              ? Colors.green.withAlpha((0.16 * 255).round())
-                              : Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.green.withAlpha((0.24 * 255).round())
-                                : Colors.green.shade100,
-                          ),
+                              ? const Color(0xFFE5EEF8)
+                              : const Color(0xFF0F172A),
                         ),
-                        child: Text(
-                          localizations.tr('bidAlreadyPlaced'),
-                          style: GoogleFonts.manrope(
-                            color: Colors.green.shade700,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${localizations.tr('lastUpdated')} - $relativeTime',
+                        style: GoogleFonts.manrope(
+                          fontSize: 11,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : Colors.grey.shade600,
                         ),
-                      )
-                    else
-                      const SizedBox.shrink(),
-                  ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withAlpha((0.12 * 255).round()),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: GoogleFonts.manrope(
+                      color: statusColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF243247)
+                      : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Route',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? AppPalette.darkTextSoft
+                          : const Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: _RouteStopCard(
+                          isDark: isDark,
+                          label: localizations.tr('pickup'),
+                          value: message.start,
+                          icon: Icons.trip_origin,
+                          color: const Color(0xFF0EA5E9),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: _RouteConnector(isDark: isDark),
+                      ),
+                      Expanded(
+                        child: _RouteStopCard(
+                          isDark: isDark,
+                          label: localizations.tr('delivery'),
+                          value: message.end,
+                          icon: Icons.location_on_outlined,
+                          color: const Color(0xFFF59E0B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (message.message.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                message.message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.manrope(
+                  color: isDark
+                      ? const Color(0xFFCBD5E1)
+                      : Colors.grey.shade700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _tag(
+                  isDark: isDark,
+                  icon: Icons.scale_outlined,
+                  label: formatWeight(message.weight, message.weightUnit),
+                ),
+                _tag(
+                  isDark: isDark,
+                  icon: Icons.category_outlined,
+                  label: message.type.isEmpty
+                      ? localizations.tr('searchGeneral')
+                      : message.type,
+                ),
+                if (message.packaging.isNotEmpty)
+                  _tag(
+                    isDark: isDark,
+                    icon: Icons.inventory_2_outlined,
+                    label: message.packaging,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.touch_app_outlined,
+                  size: 16,
+                  color: isDark
+                      ? AppPalette.darkTextSoft
+                      : Colors.grey.shade500,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    localizations.tr('tapForDetails'),
+                    style: GoogleFonts.manrope(
+                      color: isDark
+                          ? AppPalette.darkTextSoft
+                          : Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                if (showBidButton)
+                  ElevatedButton.icon(
+                    onPressed: onComment,
+                    icon: const Icon(Icons.local_offer_outlined, size: 16),
+                    label: Text(localizations.tr('bid')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0EA5E9),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                  )
+                else if (showBidStatusWhenHidden)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.green.withAlpha((0.16 * 255).round())
+                          : Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.green.withAlpha((0.24 * 255).round())
+                            : Colors.green.shade100,
+                      ),
+                    ),
+                    child: Text(
+                      localizations.tr('bidAlreadyPlaced'),
+                      style: GoogleFonts.manrope(
+                        color: Colors.green.shade700,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -303,40 +324,64 @@ class ThreadMessageWidget extends StatelessWidget {
     return '${diff.inDays}d ${localizations.tr('ago')}';
   }
 
-  Widget _tag({required IconData icon, required String label}) {
+  Widget _tag({
+    required bool isDark,
+    required IconData icon,
+    required String label,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.blueGrey),
+          Icon(
+            icon,
+            size: 14,
+            color: isDark ? const Color(0xFF94A3B8) : Colors.blueGrey,
+          ),
           const SizedBox(width: 6),
           Text(
             label,
             style: GoogleFonts.manrope(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: const Color(0xFF334155),
+              color: isDark
+                  ? const Color(0xFFE5EEF8)
+                  : const Color(0xFF334155),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _routeStop({
-    required bool isDark,
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color accentColor,
-  }) {
+class _RouteStopCard extends StatelessWidget {
+  final bool isDark;
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _RouteStopCard({
+    required this.isDark,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF142033) : Colors.white,
@@ -347,36 +392,45 @@ class ThreadMessageWidget extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: accentColor),
-              const SizedBox(width: 6),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color.withAlpha((0.14 * 255).round()),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 16, color: color),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.manrope(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Colors.blueGrey.shade500,
+                    color: isDark
+                        ? AppPalette.darkTextSoft
+                        : const Color(0xFF64748B),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             value,
-            maxLines: 3,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.spaceGrotesk(
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               fontSize: 14,
-              color: isDark
-                  ? const Color(0xFFE5EEF8)
-                  : const Color(0xFF0F172A),
+              height: 1.2,
+              color:
+                  isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
             ),
           ),
         ],
@@ -386,44 +440,41 @@ class ThreadMessageWidget extends StatelessWidget {
 }
 
 class _RouteConnector extends StatelessWidget {
-  final Color color;
   final bool isDark;
-  final bool compact;
 
-  const _RouteConnector({
-    required this.color,
-    required this.isDark,
-    required this.compact,
-  });
+  const _RouteConnector({required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: compact ? 30 : 38,
-          height: 2,
-          color: isDark ? const Color(0xFF243247) : const Color(0xFFCBD5E1),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 6),
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: color.withAlpha((0.14 * 255).round()),
-            shape: BoxShape.circle,
+    final railColor =
+        isDark ? const Color(0xFF243247) : const Color(0xFFD8E1EC);
+    final arrowColor =
+        isDark ? AppPalette.darkTextSoft : const Color(0xFF64748B);
+
+    return SizedBox(
+      width: 34,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            height: 1.5,
+            decoration: BoxDecoration(
+              color: railColor,
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
-          child: Icon(
-            Icons.east_rounded,
-            size: compact ? 14 : 16,
-            color: color,
+          const SizedBox(height: 6),
+          Icon(Icons.arrow_forward_rounded, size: 18, color: arrowColor),
+          const SizedBox(height: 6),
+          Container(
+            height: 1.5,
+            decoration: BoxDecoration(
+              color: railColor,
+              borderRadius: BorderRadius.circular(999),
+            ),
           ),
-        ),
-        Container(
-          width: compact ? 30 : 38,
-          height: 2,
-          color: isDark ? const Color(0xFF243247) : const Color(0xFFCBD5E1),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

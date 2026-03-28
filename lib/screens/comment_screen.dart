@@ -7,8 +7,10 @@ import 'package:kora/model/thread_message.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_http.dart';
+import 'package:kora/utils/ethiopia_locations.dart';
 import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/firestore_service.dart';
+import 'package:kora/utils/formatters.dart';
 import 'package:kora/widgets/active_job_controls.dart';
 import 'package:kora/widgets/agreed_price_banner.dart';
 import 'package:kora/widgets/driver_status_controls.dart';
@@ -219,6 +221,8 @@ class _CommentScreenState extends State<CommentScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -268,6 +272,18 @@ class _CommentScreenState extends State<CommentScreen> {
 
     final start = _threadText('start', widget.message.start);
     final end = _threadText('end', widget.message.end);
+    final startLocation = resolveEthiopiaLocation(
+      city: (thread['startCity'] ?? '').toString(),
+      zone: thread['startZone']?.toString(),
+      region: thread['startRegion']?.toString(),
+      fallback: start,
+    );
+    final endLocation = resolveEthiopiaLocation(
+      city: (thread['endCity'] ?? '').toString(),
+      zone: thread['endZone']?.toString(),
+      region: thread['endRegion']?.toString(),
+      fallback: end,
+    );
     final loadDescription = _threadText('message', widget.message.message);
     final loadType = _threadText('type', widget.message.type);
     final packaging = _threadText('packaging', widget.message.packaging);
@@ -280,7 +296,7 @@ class _CommentScreenState extends State<CommentScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: Text('$start -> $end'),
+        title: Text('${startLocation.city} -> ${endLocation.city}'),
       ),
       body: SafeArea(
         child: Column(
@@ -304,8 +320,8 @@ class _CommentScreenState extends State<CommentScreen> {
                       shipperName: shipperName,
                       shipperImageUrl: shipperImage,
                       loadDescription: loadDescription,
-                      start: start,
-                      end: end,
+                      start: startLocation,
+                      end: endLocation,
                       statusLabel: deliveryStatus.replaceAll('_', ' '),
                       statusColor: statusColor,
                       lastUpdated: _lastUpdated == null
@@ -329,7 +345,10 @@ class _CommentScreenState extends State<CommentScreen> {
                       children: [
                         _DetailMetricCard(
                           label: localizations.tr('weight'),
-                          value: '${_threadWeight()} ${_threadWeightUnit()}',
+                          value: formatWeight(
+                            _threadWeight(),
+                            _threadWeightUnit(),
+                          ),
                           icon: Icons.scale_outlined,
                         ),
                         _DetailMetricCard(
@@ -352,13 +371,17 @@ class _CommentScreenState extends State<CommentScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    _RouteCard(start: start, end: end, message: loadDescription),
+                    _RouteCard(
+                      start: startLocation,
+                      end: endLocation,
+                      message: loadDescription,
+                    ),
                     const SizedBox(height: 16),
                     _SectionTitle(
                       title: 'Bid activity',
                       subtitle: _bids.isEmpty
                           ? 'No bids yet on this load.'
-                          : '${_bids.length} bids received${bestBid == null ? '' : ' - Best offer ${bestBid.toStringAsFixed(2)} $currency'}',
+                          : '${_bids.length} bids received${bestBid == null ? '' : ' - Best offer ${formatPrice(bestBid, currency)}'}',
                     ),
                     const SizedBox(height: 10),
                     if (_bids.isEmpty)
@@ -386,8 +409,12 @@ class _CommentScreenState extends State<CommentScreen> {
             if (!isShipper && !isBiddingClosed)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  color: isDark ? AppPalette.darkCard : Colors.white,
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+                    ),
+                  ),
                 ),
                 child: PlaceBidWidget(
                   threadId: widget.threadId,
@@ -398,8 +425,12 @@ class _CommentScreenState extends State<CommentScreen> {
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  color: isDark ? AppPalette.darkCard : Colors.white,
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+                    ),
+                  ),
                 ),
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                 child: Column(
@@ -435,8 +466,8 @@ class _LoadHeroCard extends StatelessWidget {
   final String shipperName;
   final String? shipperImageUrl;
   final String loadDescription;
-  final String start;
-  final String end;
+  final ResolvedEthiopiaLocation start;
+  final ResolvedEthiopiaLocation end;
   final String statusLabel;
   final Color statusColor;
   final String? lastUpdated;
@@ -544,7 +575,7 @@ class _LoadHeroCard extends StatelessWidget {
 
 class _RoutePoint extends StatelessWidget {
   final String label;
-  final String value;
+  final ResolvedEthiopiaLocation value;
   final bool isStart;
 
   const _RoutePoint({
@@ -581,12 +612,21 @@ class _RoutePoint extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                value,
+                value.city,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                     ),
               ),
+              if (value.subtitle.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  value.subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                      ),
+                ),
+              ],
             ],
           ),
         ),
@@ -606,6 +646,7 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -613,14 +654,14 @@ class _SectionTitle extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppPalette.ink,
+                color: isDark ? AppPalette.darkText : AppPalette.ink,
               ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.black54,
+                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
               ),
         ),
       ],
@@ -641,12 +682,15 @@ class _DetailMetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppPalette.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,7 +700,7 @@ class _DetailMetricCard extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.black54,
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                 ),
           ),
           const SizedBox(height: 4),
@@ -675,8 +719,8 @@ class _DetailMetricCard extends StatelessWidget {
 }
 
 class _RouteCard extends StatelessWidget {
-  final String start;
-  final String end;
+  final ResolvedEthiopiaLocation start;
+  final ResolvedEthiopiaLocation end;
   final String message;
 
   const _RouteCard({
@@ -687,12 +731,15 @@ class _RouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppPalette.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,7 +764,7 @@ class _RouteCard extends StatelessWidget {
             color: const Color(0xFF0EA5E9),
           ),
           const SizedBox(height: 12),
-          Divider(color: Colors.grey.shade200),
+          Divider(color: isDark ? AppPalette.darkOutline : Colors.grey.shade200),
           const SizedBox(height: 12),
           _RouteRow(
             icon: Icons.place_outlined,
@@ -727,7 +774,7 @@ class _RouteCard extends StatelessWidget {
           ),
           if (message.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            Divider(color: Colors.grey.shade200),
+            Divider(color: isDark ? AppPalette.darkOutline : Colors.grey.shade200),
             const SizedBox(height: 12),
             Text(
               'Shipment notes',
@@ -739,7 +786,8 @@ class _RouteCard extends StatelessWidget {
             Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF475569),
+                    color:
+                        isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
                     height: 1.45,
                   ),
             ),
@@ -753,7 +801,7 @@ class _RouteCard extends StatelessWidget {
 class _RouteRow extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
+  final ResolvedEthiopiaLocation value;
   final Color color;
 
   const _RouteRow({
@@ -765,6 +813,7 @@ class _RouteRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -785,16 +834,27 @@ class _RouteRow extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.black54,
+                      color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                     ),
               ),
               const SizedBox(height: 4),
               Text(
-                value,
+                value.city,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
+              if (value.subtitle.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  value.subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isDark
+                            ? AppPalette.darkTextSoft
+                            : const Color(0xFF475569),
+                      ),
+                ),
+              ],
             ],
           ),
         ),
@@ -810,18 +870,21 @@ class _EmptyBidsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppPalette.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Text(
         text,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.black54,
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
             ),
       ),
     );
@@ -876,6 +939,7 @@ class _BidCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bidDriverId = (bid['driverId'] ?? '').toString();
     final driver = bid['driver'] as Map<String, dynamic>?;
     final driverName = (driver?['name'] ?? bidDriverId).toString();
@@ -895,9 +959,11 @@ class _BidCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppPalette.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -923,7 +989,7 @@ class _BidCard extends StatelessWidget {
                       Text(
                         '${localizations.tr('ratingLabel')}: ${driverRating.toStringAsFixed(1)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.black54,
+                              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                             ),
                       ),
                   ],
@@ -952,9 +1018,11 @@ class _BidCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
+              color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(
+                color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,15 +1030,15 @@ class _BidCard extends StatelessWidget {
                 Text(
                   'Offer',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.black54,
+                        color: isDark ? AppPalette.darkTextSoft : Colors.black54,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${amount.toStringAsFixed(2)} $currency',
+                  formatPrice(amount, currency),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: AppPalette.ink,
+                        color: isDark ? AppPalette.darkText : AppPalette.ink,
                       ),
                 ),
                 if (carrierNotes.isNotEmpty) ...[
@@ -978,7 +1046,9 @@ class _BidCard extends StatelessWidget {
                   Text(
                     carrierNotes,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF475569),
+                          color: isDark
+                              ? AppPalette.darkTextSoft
+                              : const Color(0xFF475569),
                           height: 1.45,
                         ),
                   ),

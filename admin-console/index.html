@@ -7,61 +7,248 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="container">
-      <header class="header">
-        <h1>Kora Admin Console</h1>
-        <p>Verification + disputes control panel</p>
-      </header>
-
-      <section class="card" id="authCard">
-        <h2>Admin Sign In</h2>
-        <div class="row">
-          <input id="email" type="email" placeholder="admin@email.com" />
-          <input id="password" type="password" placeholder="password" />
-          <button id="loginBtn">Sign In</button>
-          <button id="logoutBtn" class="secondary" disabled>Sign Out</button>
+    <div class="admin-shell">
+      <aside class="sidebar">
+        <div class="brand card card-dark">
+          <span class="eyebrow">Kora Operations</span>
+          <h1>Kora Admin</h1>
+          <p>Moderation, monitoring, user management, and route analytics.</p>
         </div>
-        <small id="authStatus">Not signed in</small>
-      </section>
 
-      <section class="card" id="configCard">
-        <h2>API Config</h2>
-        <div class="row">
-          <input id="apiBase" placeholder="https://your-backend-domain.com" />
-          <button id="saveApiBtn" class="secondary">Save API Base</button>
-        </div>
-        <small>Set your backend base URL once. A Vercel build-time default can also prefill this field for production.</small>
-      </section>
+        <nav class="nav card">
+          <button class="nav-link active" data-panel="overview">Overview</button>
+          <button class="nav-link" data-panel="loads">Loads</button>
+          <button class="nav-link" data-panel="users">Users</button>
+          <button class="nav-link" data-panel="moderation">Moderation</button>
+          <button class="nav-link" data-panel="analytics">Analytics</button>
+        </nav>
 
-      <section class="card" id="claimCard">
-        <h2>Admin Claim Management</h2>
-        <div class="row">
-          <input id="targetUid" placeholder="Target user UID" />
-          <label><input type="checkbox" id="targetAdmin" /> admin</label>
-          <label><input type="checkbox" id="targetSuperAdmin" /> superAdmin</label>
-          <button id="setClaimBtn">Apply Claim</button>
-        </div>
-        <small>Setting <code>superAdmin</code> requires your account to already be super admin.</small>
-      </section>
+        <section class="card utility-card">
+          <h2>Admin Sign In</h2>
+          <div class="field-stack">
+            <input id="email" type="email" placeholder="admin@email.com" />
+            <input id="password" type="password" placeholder="password" />
+          </div>
+          <div class="row">
+            <button id="loginBtn">Sign In</button>
+            <button id="logoutBtn" class="secondary" disabled>Sign Out</button>
+          </div>
+          <small id="authStatus">Not signed in</small>
+        </section>
 
-      <section class="card" id="usersCard">
-        <h2>Pending Verification</h2>
-        <div class="row">
-          <button id="refreshUsersBtn" class="secondary">Refresh</button>
-        </div>
-        <div id="usersList" class="list"></div>
-      </section>
+        <section class="card utility-card">
+          <h2>Backend Config</h2>
+          <div class="field-stack">
+            <input id="apiBase" placeholder="https://your-backend-domain.com" />
+          </div>
+          <div class="row">
+            <button id="saveApiBtn" class="secondary">Save API Base</button>
+          </div>
+          <small>Use your deployed backend URL here.</small>
+        </section>
 
-      <section class="card" id="disputesCard">
-        <h2>Open Disputes</h2>
-        <div class="row">
-          <button id="refreshDisputesBtn" class="secondary">Refresh</button>
-        </div>
-        <div id="disputesList" class="list"></div>
-      </section>
+        <section class="card utility-card">
+          <h2>Claim Management</h2>
+          <div class="field-stack">
+            <input id="targetUid" placeholder="Target user UID" />
+            <label class="check-chip"><input type="checkbox" id="targetAdmin" /> admin</label>
+            <label class="check-chip"><input type="checkbox" id="targetSuperAdmin" /> super admin</label>
+          </div>
+          <div class="row">
+            <button id="setClaimBtn">Apply Claim</button>
+          </div>
+          <small>Only super admins can change admin claims.</small>
+        </section>
+      </aside>
 
-      <pre id="logBox" class="log"></pre>
-    </main>
+      <main class="main">
+        <header class="topbar card">
+          <div>
+            <span class="eyebrow ink">Traditional Admin Panel</span>
+            <h2 id="pageTitle">Overview</h2>
+            <p id="pageSubtitle">Live operational visibility across Kora.</p>
+          </div>
+          <div class="topbar-actions">
+            <div class="status-card">
+              <span>Session</span>
+              <strong id="authBadge">Signed out</strong>
+            </div>
+            <div class="status-card">
+              <span>API base</span>
+              <strong id="apiBadge">Not set</strong>
+            </div>
+            <button id="refreshCurrentBtn" class="secondary">Refresh View</button>
+          </div>
+        </header>
+
+        <section class="panel active" data-panel="overview">
+          <div class="metric-grid" id="overviewMetrics"></div>
+          <div class="analytics-grid">
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Load Status</h3>
+                  <p>Current shipment distribution across the network.</p>
+                </div>
+              </div>
+              <div id="statusChart" class="chart-list"></div>
+            </section>
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Verification Queue</h3>
+                  <p>Approval pressure on the onboarding side.</p>
+                </div>
+              </div>
+              <div id="verificationChart" class="chart-list"></div>
+            </section>
+          </div>
+          <div class="analytics-grid">
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Recent Loads</h3>
+                  <p>Newest posted shipments with bid activity.</p>
+                </div>
+              </div>
+              <div id="recentLoadsList" class="list"></div>
+            </section>
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Route Frequency</h3>
+                  <p>Most repeated origin-to-destination pairs.</p>
+                </div>
+              </div>
+              <div id="topRoutesChart" class="chart-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="loads">
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>Load Monitoring</h3>
+                <p>Filter and inspect load activity across the marketplace.</p>
+              </div>
+              <div class="toolbar">
+                <input id="loadsSearch" placeholder="Search route, shipper, or load text" />
+                <select id="loadsStatusFilter">
+                  <option value="">All statuses</option>
+                  <option value="pending_bids">Open for bids</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="driving_to_location">Driving to location</option>
+                  <option value="picked_up">Picked up</option>
+                  <option value="on_the_road">On the road</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <button id="refreshLoadsBtn" class="secondary">Refresh Loads</button>
+              </div>
+            </div>
+            <div id="loadsList" class="list"></div>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="users">
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>User Management</h3>
+                <p>Review accounts, roles, verification state, and account type.</p>
+              </div>
+              <div class="toolbar">
+                <input id="usersSearch" placeholder="Search name, email, username, or phone" />
+                <select id="usersRoleFilter">
+                  <option value="">All roles</option>
+                  <option value="drivers">Drivers</option>
+                  <option value="cargo">Cargo</option>
+                  <option value="admins">Admins</option>
+                  <option value="superadmins">Super admins</option>
+                </select>
+                <select id="usersVerificationFilter">
+                  <option value="">All verification states</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <button id="refreshUsersManageBtn" class="secondary">Refresh Users</button>
+              </div>
+            </div>
+            <div id="usersManageList" class="list"></div>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="moderation">
+          <div class="analytics-grid">
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Pending Verification</h3>
+                  <p>Approve or reject waiting users.</p>
+                </div>
+                <button id="refreshUsersBtn" class="secondary">Refresh</button>
+              </div>
+              <div id="usersList" class="list"></div>
+            </section>
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Open Disputes</h3>
+                  <p>Resolve customer and delivery issues quickly.</p>
+                </div>
+                <button id="refreshDisputesBtn" class="secondary">Refresh</button>
+              </div>
+              <div id="disputesList" class="list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="analytics">
+          <div class="analytics-grid">
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Monthly Load Trend</h3>
+                  <p>Loads posted across the last six months.</p>
+                </div>
+              </div>
+              <div id="monthlyLoadsChart" class="chart-list"></div>
+            </section>
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>User Mix</h3>
+                  <p>How the marketplace is split across operators.</p>
+                </div>
+              </div>
+              <div id="userMixChart" class="chart-list"></div>
+            </section>
+          </div>
+          <div class="analytics-grid">
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Bid Status</h3>
+                  <p>Operational health across the bidding lifecycle.</p>
+                </div>
+              </div>
+              <div id="bidStatusChart" class="chart-list"></div>
+            </section>
+            <section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Activity Log</h3>
+                  <p>Operator actions and errors from this session.</p>
+                </div>
+              </div>
+              <pre id="logBox" class="log"></pre>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
 
     <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>

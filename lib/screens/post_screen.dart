@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../utils/backend_http.dart';
-import '../utils/notification_helper.dart';
 import '../app_localizations.dart';
+import '../utils/app_theme.dart';
+import '../utils/backend_http.dart';
+import '../utils/ethiopia_locations.dart';
 import '../utils/error_handler.dart';
+import '../utils/notification_helper.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -21,11 +23,23 @@ class _PostScreenState extends State<PostScreen> {
   final _endController = TextEditingController();
   final _packagingController = TextEditingController();
 
+  EthiopiaCityOption? _startLocation;
+  EthiopiaCityOption? _endLocation;
+
   String _type = 'General';
   String _weightUnit = 'kg';
   bool _submitting = false;
 
-  final _types = const ['General', 'Coffee', 'Fuel', 'Food', 'Fertilizer', 'Construction Materials', 'Heavy Machinery', 'Livestock'];
+  final _types = const [
+    'General',
+    'Coffee',
+    'Fuel',
+    'Food',
+    'Fertilizer',
+    'Construction Materials',
+    'Heavy Machinery',
+    'Livestock',
+  ];
   final _units = const ['kg', 'ton', 'quintal', '20ft container', '40ft container', 'litre'];
 
   @override
@@ -36,6 +50,33 @@ class _PostScreenState extends State<PostScreen> {
     _endController.dispose();
     _packagingController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickCity({required bool isStart}) async {
+    final selected = await showModalBottomSheet<EthiopiaCityOption>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => _CityPickerSheet(
+        title: isStart ? 'Choose pickup city' : 'Choose delivery city',
+        selected: isStart ? _startLocation : _endLocation,
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+
+    setState(() {
+      if (isStart) {
+        _startLocation = selected;
+        _startController.text = selected.city;
+      } else {
+        _endLocation = selected;
+        _endController.text = selected.city;
+      }
+    });
   }
 
   Future<void> _submit() async {
@@ -52,6 +93,15 @@ class _PostScreenState extends State<PostScreen> {
       return;
     }
 
+    if (_startLocation == null || _endLocation == null) {
+      NotificationHelper.showSnackBar(
+        context,
+        'Choose both pickup and delivery cities from the list.',
+        color: Colors.red,
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
 
     try {
@@ -62,8 +112,14 @@ class _PostScreenState extends State<PostScreen> {
           'message': _messageController.text.trim(),
           'weight': weight,
           'type': _type,
-          'start': _startController.text.trim(),
-          'end': _endController.text.trim(),
+          'start': _startLocation!.city,
+          'end': _endLocation!.city,
+          'startCity': _startLocation!.city,
+          'startZone': _startLocation!.zone,
+          'startRegion': _startLocation!.region,
+          'endCity': _endLocation!.city,
+          'endZone': _endLocation!.zone,
+          'endRegion': _endLocation!.region,
           'packaging': _packagingController.text.trim(),
           'weightUnit': _weightUnit,
           'deliveryStatus': 'pending_bids',
@@ -76,10 +132,8 @@ class _PostScreenState extends State<PostScreen> {
 
       if (!mounted) return;
       final localizations = AppLocalizations.of(context);
-      
-      // Navigate to home/feed instead of just popping
-      // This gives better feedback as the user sees their new post
-      Navigator.of(context).pop(); 
+
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(localizations.tr('loadPostedSuccess')),
@@ -102,6 +156,9 @@ class _PostScreenState extends State<PostScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(localizations.tr('postLoad')),
@@ -114,32 +171,40 @@ class _PostScreenState extends State<PostScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          localizations.tr('shareLoadDetails'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: isDark
+                        ? AppPalette.heroGradientDark
+                        : const LinearGradient(
+                            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        localizations.tr('shareLoadDetails'),
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          localizations.tr('shareLoadDetailsHint'),
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Use the fixed city list so route details stay consistent across feed, detail, and admin tools.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withAlpha((0.78 * 255).round()),
+                          height: 1.5,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _messageController,
                   decoration: InputDecoration(
@@ -206,46 +271,69 @@ class _PostScreenState extends State<PostScreen> {
                     if (value != null) setState(() => _type = value);
                   },
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
+                const SizedBox(height: 16),
+                _CityField(
                   controller: _startController,
-                  textCapitalization: TextCapitalization.words,
-                  autofillHints: const [AutofillHints.addressCity],
-                  decoration: InputDecoration(
-                    labelText: localizations.tr('startLocation'),
-                    helperText: localizations.tr('startLocationHint'),
-                    prefixIcon: const Icon(Icons.trip_origin),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return localizations.tr('required');
-                    }
-                    if (value.trim().length < 3) {
-                      return localizations.tr('required');
-                    }
-                    return null;
-                  },
+                  label: localizations.tr('startLocation'),
+                  icon: Icons.trip_origin,
+                  helperText: _startLocation == null
+                      ? 'Choose from major Ethiopian cities.'
+                      : _startLocation!.subtitle,
+                  onTap: () => _pickCity(isStart: true),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
+                _CityField(
                   controller: _endController,
-                  textCapitalization: TextCapitalization.words,
-                  autofillHints: const [AutofillHints.addressCity],
-                  decoration: InputDecoration(
-                    labelText: localizations.tr('destination'),
-                    helperText: localizations.tr('destinationHint'),
-                    prefixIcon: const Icon(Icons.flag_outlined),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return localizations.tr('required');
-                    }
-                    if (value.trim().length < 3) {
-                      return localizations.tr('required');
-                    }
-                    return null;
-                  },
+                  label: localizations.tr('destination'),
+                  icon: Icons.flag_outlined,
+                  helperText: _endLocation == null
+                      ? 'Choose from major Ethiopian cities.'
+                      : _endLocation!.subtitle,
+                  onTap: () => _pickCity(isStart: false),
                 ),
+                if (_startLocation != null && _endLocation != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Route preview',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _RoutePreviewRow(
+                          label: 'Pickup',
+                          value: _startLocation!.city,
+                          subtitle: _startLocation!.subtitle,
+                          color: const Color(0xFF0EA5E9),
+                        ),
+                        const SizedBox(height: 12),
+                        Divider(
+                          color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                          height: 1,
+                        ),
+                        const SizedBox(height: 12),
+                        _RoutePreviewRow(
+                          label: 'Delivery',
+                          value: _endLocation!.city,
+                          subtitle: _endLocation!.subtitle,
+                          color: const Color(0xFFF59E0B),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _packagingController,
@@ -283,3 +371,239 @@ class _PostScreenState extends State<PostScreen> {
   }
 }
 
+class _CityField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String helperText;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CityField({
+    required this.controller,
+    required this.label,
+    required this.helperText,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      readOnly: true,
+      onTap: onTap,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helperText,
+        prefixIcon: Icon(icon),
+        suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded),
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Required';
+        }
+        return null;
+      },
+    );
+  }
+}
+
+class _RoutePreviewRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final String subtitle;
+  final Color color;
+
+  const _RoutePreviewRow({
+    required this.label,
+    required this.value,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: color.withAlpha((0.14 * 255).round()),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(label == 'Pickup' ? Icons.trip_origin : Icons.place_outlined, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CityPickerSheet extends StatefulWidget {
+  final String title;
+  final EthiopiaCityOption? selected;
+
+  const _CityPickerSheet({
+    required this.title,
+    required this.selected,
+  });
+
+  @override
+  State<_CityPickerSheet> createState() => _CityPickerSheetState();
+}
+
+class _CityPickerSheetState extends State<_CityPickerSheet> {
+  final _searchController = TextEditingController();
+
+  List<EthiopiaCityOption> get _results {
+    final query = _searchController.text.trim().toLowerCase();
+    final sorted = [...ethiopiaCityOptions]
+      ..sort((a, b) => a.city.compareTo(b.city));
+    if (query.isEmpty) {
+      return sorted;
+    }
+    return sorted.where((option) {
+      final haystack = '${option.city} ${option.zone} ${option.region} ${option.aliases.join(' ')}'
+          .toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + viewInsets),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.82,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: isDark ? AppPalette.darkOutline : const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Search the fixed city list to keep route analytics and route details consistent.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  hintText: 'Search city, zone, or region',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: _results.length,
+                  separatorBuilder: (_, __) => Divider(
+                    color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                    height: 1,
+                  ),
+                  itemBuilder: (context, index) {
+                    final option = _results[index];
+                    final isSelected = option.city == widget.selected?.city;
+                    return ListTile(
+                      onTap: () => Navigator.of(context).pop(option),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppPalette.accent.withAlpha((0.18 * 255).round())
+                              : (isDark
+                                  ? AppPalette.darkSurfaceRaised
+                                  : const Color(0xFFF8FAFC)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.location_city_rounded,
+                          color: isSelected ? AppPalette.accent : AppPalette.accentWarm,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        option.city,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(option.subtitle),
+                      ),
+                      trailing: isSelected
+                          ? const Icon(Icons.check_circle_rounded, color: AppPalette.accent)
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

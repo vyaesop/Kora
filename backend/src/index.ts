@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import { resolveEthiopiaLocation } from './ethiopiaLocations';
 
 dotenv.config();
 
@@ -715,14 +716,27 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
       return;
     }
 
+    const startLocation = resolveEthiopiaLocation({
+      city: req.body?.startCity ?? req.body?.start,
+      zone: req.body?.startZone,
+      region: req.body?.startRegion,
+      fallback: req.body?.start,
+    });
+    const endLocation = resolveEthiopiaLocation({
+      city: req.body?.endCity ?? req.body?.end,
+      zone: req.body?.endZone,
+      region: req.body?.endRegion,
+      fallback: req.body?.end,
+    });
+
     const thread = await prisma.thread.create({
       data: {
         ownerId: userId,
         message: String(req.body?.message || ''),
         weight: req.body?.weight == null ? null : Number(req.body.weight),
         type: req.body?.type ?? null,
-        start: req.body?.start ?? null,
-        end: req.body?.end ?? null,
+        start: startLocation.city ?? req.body?.start ?? null,
+        end: endLocation.city ?? req.body?.end ?? null,
         packaging: req.body?.packaging ?? null,
         weightUnit: req.body?.weightUnit ?? 'kg',
         startLat: req.body?.startLat == null ? null : Number(req.body.startLat),
@@ -730,12 +744,12 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
         endLat: req.body?.endLat == null ? null : Number(req.body.endLat),
         endLng: req.body?.endLng == null ? null : Number(req.body.endLng),
         deliveryStatus: req.body?.deliveryStatus ?? 'pending',
-        startRegion: req.body?.startRegion ?? null,
-        startZone: req.body?.startZone ?? null,
-        startCity: req.body?.startCity ?? null,
-        endRegion: req.body?.endRegion ?? null,
-        endZone: req.body?.endZone ?? null,
-        endCity: req.body?.endCity ?? null,
+        startRegion: startLocation.region,
+        startZone: startLocation.zone,
+        startCity: startLocation.city,
+        endRegion: endLocation.region,
+        endZone: endLocation.zone,
+        endCity: endLocation.city,
       },
     });
 
@@ -1715,6 +1729,444 @@ app.get('/api/drivers/:driverId/location', requireAuth, async (req: AuthedReques
     res.json({ ok: true, location });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch location';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const now = new Date();
+    const windowStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const [
+      userCount,
+      driverCount,
+      cargoCount,
+      adminCount,
+      superAdminCount,
+      threadCount,
+      pendingLoads,
+      activeLoads,
+      deliveredLoads,
+      cancelledLoads,
+      bidCount,
+      pendingBidCount,
+      acceptedBidCount,
+      completedBidCount,
+      averageBidAmount,
+      openDisputes,
+      inReviewDisputes,
+      resolvedDisputes,
+      pendingVerification,
+      approvedVerification,
+      rejectedVerification,
+      routeRows,
+      trendRows,
+      recentLoads,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { userType: 'Driver' } }),
+      prisma.user.count({ where: { userType: 'Cargo' } }),
+      prisma.user.count({ where: { isAdmin: true } }),
+      prisma.user.count({ where: { isSuperAdmin: true } }),
+      prisma.thread.count(),
+      prisma.thread.count({ where: { deliveryStatus: 'pending_bids' } }),
+      prisma.thread.count({
+        where: {
+          deliveryStatus: {
+            in: ['accepted', 'driving_to_location', 'picked_up', 'on_the_road'],
+          },
+        },
+      }),
+      prisma.thread.count({ where: { deliveryStatus: 'delivered' } }),
+      prisma.thread.count({ where: { deliveryStatus: 'cancelled' } }),
+      prisma.bid.count(),
+      prisma.bid.count({ where: { status: 'pending' } }),
+      prisma.bid.count({ where: { status: 'accepted' } }),
+      prisma.bid.count({ where: { status: 'completed' } }),
+      prisma.bid.aggregate({ _avg: { amount: true } }),
+      prisma.dispute.count({ where: { status: 'open' } }),
+      prisma.dispute.count({ where: { status: 'in_review' } }),
+      prisma.dispute.count({ where: { status: 'resolved' } }),
+      prisma.user.count({ where: { verificationStatus: 'pending' } }),
+      prisma.user.count({ where: { verificationStatus: 'approved' } }),
+      prisma.user.count({ where: { verificationStatus: 'rejected' } }),
+      prisma.thread.findMany({
+        select: {
+          start: true,
+          startCity: true,
+          startZone: true,
+          startRegion: true,
+          end: true,
+          endCity: true,
+          endZone: true,
+          endRegion: true,
+          createdAt: true,
+        },
+      }),
+      prisma.thread.findMany({
+        where: { createdAt: { gte: windowStart } },
+        select: { createdAt: true },
+      }),
+      prisma.thread.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: {
+          id: true,
+          message: true,
+          start: true,
+          startCity: true,
+          startZone: true,
+          startRegion: true,
+          end: true,
+          endCity: true,
+          endZone: true,
+          endRegion: true,
+          weight: true,
+          weightUnit: true,
+          deliveryStatus: true,
+          createdAt: true,
+          owner: {
+            select: { id: true, name: true, email: true },
+          },
+          _count: {
+            select: {
+              bids: true,
+              disputes: true,
+            },
+          },
+          bids: {
+            orderBy: { amount: 'desc' },
+            take: 1,
+            select: {
+              amount: true,
+              status: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const routeMap = new Map<string, { route: string; count: number }>();
+    for (const row of routeRows) {
+      const startLocation = resolveEthiopiaLocation({
+        city: row.startCity ?? row.start,
+        zone: row.startZone,
+        region: row.startRegion,
+        fallback: row.start,
+      });
+      const endLocation = resolveEthiopiaLocation({
+        city: row.endCity ?? row.end,
+        zone: row.endZone,
+        region: row.endRegion,
+        fallback: row.end,
+      });
+      const start = startLocation.city ?? 'Unknown origin';
+      const end = endLocation.city ?? 'Unknown destination';
+      const key = `${start}__${end}`;
+      const route = `${start} -> ${end}`;
+      const current = routeMap.get(key);
+      routeMap.set(key, {
+        route,
+        count: (current?.count ?? 0) + 1,
+      });
+    }
+
+    const topRoutes = [...routeMap.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    const monthlyLoads = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+      const label = date.toLocaleString('en-US', {
+        month: 'short',
+        year: '2-digit',
+      });
+      return {
+        key: `${date.getFullYear()}-${date.getMonth()}`,
+        label,
+        count: 0,
+      };
+    });
+
+    const monthlyMap = new Map(monthlyLoads.map((entry) => [entry.key, entry]));
+    for (const row of trendRows) {
+      const createdAt = new Date(row.createdAt);
+      const key = `${createdAt.getFullYear()}-${createdAt.getMonth()}`;
+      const target = monthlyMap.get(key);
+      if (target) {
+        target.count += 1;
+      }
+    }
+
+    const statusBreakdown = [
+      { label: 'Open for bids', count: pendingLoads, tone: 'warning' },
+      { label: 'Active delivery', count: activeLoads, tone: 'info' },
+      { label: 'Delivered', count: deliveredLoads, tone: 'success' },
+      { label: 'Cancelled', count: cancelledLoads, tone: 'danger' },
+    ];
+
+    const verificationBreakdown = [
+      { label: 'Pending', count: pendingVerification, tone: 'warning' },
+      { label: 'Approved', count: approvedVerification, tone: 'success' },
+      { label: 'Rejected', count: rejectedVerification, tone: 'danger' },
+    ];
+
+    const userMix = [
+      { label: 'Cargo', count: cargoCount },
+      { label: 'Drivers', count: driverCount },
+      { label: 'Admins', count: adminCount },
+      { label: 'Super admins', count: superAdminCount },
+    ];
+
+    res.json({
+      ok: true,
+      overview: {
+        users: userCount,
+        threads: threadCount,
+        bids: bidCount,
+        averageBidAmount: averageBidAmount._avg.amount ?? 0,
+        disputesOpen: openDisputes,
+        disputesInReview: inReviewDisputes,
+        disputesResolved: resolvedDisputes,
+      },
+      loadStatus: statusBreakdown,
+      verification: verificationBreakdown,
+      bidStatus: [
+        { label: 'Pending', count: pendingBidCount },
+        { label: 'Accepted', count: acceptedBidCount },
+        { label: 'Completed', count: completedBidCount },
+      ],
+      userMix,
+      monthlyLoads: monthlyLoads.map(({ label, count }) => ({ label, count })),
+      topRoutes,
+      recentLoads: recentLoads.map((load) => {
+        const startLocation = resolveEthiopiaLocation({
+          city: load.startCity ?? load.start,
+          zone: load.startZone,
+          region: load.startRegion,
+          fallback: load.start,
+        });
+        const endLocation = resolveEthiopiaLocation({
+          city: load.endCity ?? load.end,
+          zone: load.endZone,
+          region: load.endRegion,
+          fallback: load.end,
+        });
+        return {
+          id: load.id,
+          message: load.message,
+          start: startLocation.label || load.start,
+          end: endLocation.label || load.end,
+          startDisplay: startLocation.label,
+          endDisplay: endLocation.label,
+          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown origin'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
+          startCity: startLocation.city,
+          startZone: startLocation.zone,
+          startRegion: startLocation.region,
+          endCity: endLocation.city,
+          endZone: endLocation.zone,
+          endRegion: endLocation.region,
+          weight: load.weight,
+          weightUnit: load.weightUnit,
+          deliveryStatus: load.deliveryStatus,
+          createdAt: load.createdAt,
+          owner: load.owner,
+          bidsCount: load._count.bids,
+          disputesCount: load._count.disputes,
+          bestBidAmount: load.bids[0]?.amount ?? null,
+          bestBidStatus: load.bids[0]?.status ?? null,
+        };
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch admin dashboard';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const verificationStatus = String(req.query.verificationStatus || '').trim();
+    const role = String(req.query.role || '').trim().toLowerCase();
+    const limitRaw = Number(req.query.limit ?? 40);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 40;
+
+    const filters: Prisma.UserWhereInput[] = [];
+
+    if (search) {
+      filters.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { username: { contains: search, mode: 'insensitive' } },
+          { phoneNumber: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (verificationStatus) {
+      filters.push({ verificationStatus });
+    }
+
+    if (role === 'drivers') {
+      filters.push({ userType: 'Driver' });
+    } else if (role === 'cargo') {
+      filters.push({ userType: 'Cargo' });
+    } else if (role === 'admins') {
+      filters.push({ isAdmin: true });
+    } else if (role === 'superadmins') {
+      filters.push({ isSuperAdmin: true });
+    }
+
+    const users = await prisma.user.findMany({
+      where: filters.length > 0 ? { AND: filters } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        phoneNumber: true,
+        truckType: true,
+        userType: true,
+        verificationStatus: true,
+        verificationNote: true,
+        isAdmin: true,
+        isSuperAdmin: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ ok: true, users });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch users';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/admin/loads', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const search = String(req.query.search || '').trim();
+    const status = String(req.query.status || '').trim();
+    const limitRaw = Number(req.query.limit ?? 40);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 40;
+
+    const filters: Prisma.ThreadWhereInput[] = [];
+
+    if (status) {
+      filters.push({ deliveryStatus: status });
+    }
+
+    if (search) {
+      filters.push({
+        OR: [
+          { message: { contains: search, mode: 'insensitive' } },
+          { start: { contains: search, mode: 'insensitive' } },
+          { end: { contains: search, mode: 'insensitive' } },
+          { startCity: { contains: search, mode: 'insensitive' } },
+          { startZone: { contains: search, mode: 'insensitive' } },
+          { startRegion: { contains: search, mode: 'insensitive' } },
+          { endCity: { contains: search, mode: 'insensitive' } },
+          { endZone: { contains: search, mode: 'insensitive' } },
+          { endRegion: { contains: search, mode: 'insensitive' } },
+          { owner: { is: { name: { contains: search, mode: 'insensitive' } } } },
+          { owner: { is: { email: { contains: search, mode: 'insensitive' } } } },
+        ],
+      });
+    }
+
+    const loads = await prisma.thread.findMany({
+      where: filters.length > 0 ? { AND: filters } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        message: true,
+        start: true,
+        startCity: true,
+        startZone: true,
+        startRegion: true,
+        end: true,
+        endCity: true,
+        endZone: true,
+        endRegion: true,
+        weight: true,
+        weightUnit: true,
+        deliveryStatus: true,
+        createdAt: true,
+        updatedAt: true,
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            bids: true,
+            disputes: true,
+          },
+        },
+        bids: {
+          orderBy: { amount: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            amount: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      ok: true,
+      loads: loads.map((load) => {
+        const startLocation = resolveEthiopiaLocation({
+          city: load.startCity ?? load.start,
+          zone: load.startZone,
+          region: load.startRegion,
+          fallback: load.start,
+        });
+        const endLocation = resolveEthiopiaLocation({
+          city: load.endCity ?? load.end,
+          zone: load.endZone,
+          region: load.endRegion,
+          fallback: load.end,
+        });
+        return {
+          id: load.id,
+          message: load.message,
+          start: startLocation.label || load.start,
+          end: endLocation.label || load.end,
+          startDisplay: startLocation.label,
+          endDisplay: endLocation.label,
+          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown origin'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
+          startCity: startLocation.city,
+          startZone: startLocation.zone,
+          startRegion: startLocation.region,
+          endCity: endLocation.city,
+          endZone: endLocation.zone,
+          endRegion: endLocation.region,
+          weight: load.weight,
+          weightUnit: load.weightUnit,
+          deliveryStatus: load.deliveryStatus,
+          createdAt: load.createdAt,
+          updatedAt: load.updatedAt,
+          owner: load.owner,
+          bidsCount: load._count.bids,
+          disputesCount: load._count.disputes,
+          bestBidAmount: load.bids[0]?.amount ?? null,
+          bestBidStatus: load.bids[0]?.status ?? null,
+        };
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch loads';
     res.status(500).json({ ok: false, error: message });
   }
 });

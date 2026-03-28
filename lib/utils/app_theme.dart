@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 const String themeModePreferenceKey = 'app_theme_mode';
 
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 class AppPalette {
   static const Color ink = Color(0xFF0B1220);
@@ -293,7 +293,7 @@ class AppTheme {
       case 'dark':
         return ThemeMode.dark;
       default:
-        return ThemeMode.system;
+        return ThemeMode.light;
     }
   }
 

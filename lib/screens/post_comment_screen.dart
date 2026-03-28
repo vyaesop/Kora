@@ -5,6 +5,8 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 import '../utils/backend_http.dart';
 import '../utils/firestore_service.dart';
+import '../utils/formatters.dart';
+import '../utils/app_theme.dart';
 import '../app_localizations.dart';
 
 class PostCommentScreen extends StatefulWidget {
@@ -165,6 +167,7 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
   @override
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
         if (_loadingExistingBid)
@@ -187,8 +190,10 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
                 },
                 child: Text(
                   localizations.tr('cancel'),
-                  style: const TextStyle(
-                      color: Colors.black, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: isDark ? AppPalette.darkText : AppPalette.ink,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Text(
@@ -216,12 +221,17 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: isDark
+                        ? const Color(0xFF3B2310)
+                        : Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child: Text(
                     'You already bid here. Submitting will update your existing bid.',
-                    style: TextStyle(fontSize: 12),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppPalette.darkText : AppPalette.ink,
+                    ),
                   ),
                 ),
               TextField(
@@ -239,18 +249,22 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: isDark ? AppPalette.darkSurfaceRaised : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                        'Estimated platform fee (5%): ${_estimatedFee.toStringAsFixed(2)} $_defaultCurrency'),
+                      'Estimated platform fee (5%): ${formatPrice(_estimatedFee, _defaultCurrency)}',
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      'Estimated net payout: ${_estimatedNet.toStringAsFixed(2)} $_defaultCurrency',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      'Estimated net payout: ${formatPrice(_estimatedNet, _defaultCurrency)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppPalette.darkText : AppPalette.ink,
+                      ),
                     ),
                   ],
                 ),
