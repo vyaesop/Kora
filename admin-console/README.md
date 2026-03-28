@@ -28,7 +28,7 @@ The admin project now has a tiny build step that generates `dist/config.js` from
 
 ### Recommended environment variable
 
-- `KORA_ADMIN_API_BASE_URL=https://your-backend-project.vercel.app`
+- `KORA_API_BASE_URL=https://kora-backend-alpha.vercel.app`
 
 If this variable is empty, the admin still works and lets you enter the API base manually in the browser.
 

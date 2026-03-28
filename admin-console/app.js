@@ -58,7 +58,10 @@ const injectedApiBase =
     ? window.KORA_ADMIN_CONFIG.apiBase.trim()
     : '';
 
-const defaultApiBase = injectedApiBase || 'http://localhost:3000';
+const isLocalHost =
+  typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const defaultApiBase = injectedApiBase || (isLocalHost ? 'http://localhost:3000' : '');
 apiBaseInput.value = localStorage.getItem(apiBaseStorageKey) || defaultApiBase;
 
 const panelMeta = {
@@ -150,6 +153,10 @@ function setAuthState(token, user) {
       ? 'Super admin'
       : 'Admin'
     : 'Signed out';
+}
+
+function setAuthMessage(message) {
+  authStatus.textContent = message;
 }
 
 function formatNumber(value, fractionDigits = 0) {
@@ -570,6 +577,7 @@ navLinks.forEach((button) => {
 saveApiBtn.addEventListener('click', () => {
   localStorage.setItem(apiBaseStorageKey, apiBaseInput.value.trim());
   updateApiBadge();
+  setAuthMessage(authToken && authUser ? authStatus.textContent : 'API base saved.');
   log('Saved API base URL.');
 });
 
@@ -596,12 +604,16 @@ setClaimBtn.addEventListener('click', async () => {
 });
 
 loginBtn.addEventListener('click', async () => {
+  loginBtn.disabled = true;
   try {
     const apiBase = getApiBase();
     if (!apiBase) {
+      setAuthMessage('Set the backend API base URL first.');
       log('Set API base URL first.');
       return;
     }
+
+    setAuthMessage('Signing in...');
 
     const response = await fetch(`${apiBase}/api/auth/login`, {
       method: 'POST',
@@ -621,9 +633,19 @@ loginBtn.addEventListener('click', async () => {
 
     setAuthState(data.token, data.user);
     await bootstrapAdminData();
+    setAuthMessage(
+      `Signed in as ${data.user.email}${data.user.isSuperAdmin ? ' (super admin)' : ''}`,
+    );
     log('Signed in successfully.');
   } catch (error) {
+    const message =
+      error instanceof Error && error.message === 'Failed to fetch'
+        ? 'Sign in failed: could not reach the backend. Check API base and backend CORS.'
+        : `Sign in failed: ${error.message}`;
+    setAuthMessage(message);
     log(`Sign in failed: ${error.message}`);
+  } finally {
+    loginBtn.disabled = false;
   }
 });
 
@@ -800,4 +822,7 @@ async function hydrateSession() {
 setPanel(activePanel);
 setAuthState(authToken, authUser);
 updateApiBadge();
+if (!getApiBase()) {
+  setAuthMessage('Set your backend API base URL to enable sign in.');
+}
 hydrateSession();
