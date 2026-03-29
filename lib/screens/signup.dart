@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:kora/screens/home.dart'; // Add this import if not present
-// removed unused Provider import (project uses Riverpod)
 import '../app_localizations.dart';
+import '../screens/login.dart';
+import '../screens/verification_documents_screen.dart';
 import '../widgets/language_switcher.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/error_handler.dart';
@@ -10,8 +10,15 @@ class SignupScreen extends StatefulWidget {
   final String? initialUserType;
   final VoidCallback? onBack;
   final String? language;
+  final bool showBackToLogin;
 
-  const SignupScreen({super.key, this.initialUserType, this.onBack, this.language});
+  const SignupScreen({
+    super.key,
+    this.initialUserType,
+    this.onBack,
+    this.language,
+    this.showBackToLogin = true,
+  });
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -89,11 +96,13 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (mounted) {
-        // User is already logged in after sign up, so go to Home
-        Navigator.pushAndRemoveUntil(
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const Home()),
-          (route) => false,
+          MaterialPageRoute(
+            builder: (_) => const VerificationDocumentsScreen(
+              isPostSignupFlow: true,
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -354,7 +363,17 @@ class _SignupScreenState extends State<SignupScreen> {
                             children: [
                               Text(appLocalizations.tr('alreadyAccount')),
                               TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
+                              onPressed: () {
+                                if (widget.showBackToLogin) {
+                                  Navigator.of(context).pop();
+                                  return;
+                                }
+                                Navigator.of(context).pushReplacement(
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginScreen(),
+                                  ),
+                                );
+                              },
                                 child: Text(
                                   appLocalizations.tr('login'),
                                   style: const TextStyle(fontWeight: FontWeight.bold),
@@ -375,4 +394,3 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 }
-

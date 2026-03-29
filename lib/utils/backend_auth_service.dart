@@ -41,10 +41,12 @@ class BackendAuthService {
       userType: (payload['userType'] ?? 'Cargo').toString(),
       truckType: payload['truckType']?.toString(),
       address: payload['address']?.toString(),
+      licenseNumberPhoto: payload['licenseNumberPhoto']?.toString(),
+      idPhoto: payload['idPhoto']?.toString(),
       acceptedLoads: const [],
       termsAccepted: true,
       privacyAccepted: true,
-      verificationStatus: (payload['verificationStatus'] ?? 'pending').toString(),
+      verificationStatus: (payload['verificationStatus'] ?? 'not_submitted').toString(),
     );
   }
 

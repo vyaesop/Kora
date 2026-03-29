@@ -213,6 +213,52 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function verificationLabel(status) {
+  switch (String(status || '').trim().toLowerCase()) {
+    case 'pending':
+    case 'submitted':
+      return 'In review';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return 'Not submitted';
+  }
+}
+
+function renderDocumentCard(label, source) {
+  const hasSource = Boolean(String(source || '').trim());
+  return `
+    <div class="document-card ${hasSource ? '' : 'document-card-empty'}">
+      <div class="document-preview">
+        ${
+          hasSource
+            ? `<img src="${escapeHtml(source)}" alt="${escapeHtml(label)}" />`
+            : '<span>No file</span>'
+        }
+      </div>
+      <div class="document-meta">
+        <strong>${escapeHtml(label)}</strong>
+        <span>${hasSource ? 'Uploaded' : 'Missing'}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderVerificationDocuments(user) {
+  const documents = [
+    renderDocumentCard('National ID', user.idPhoto),
+    user.userType === 'Driver'
+      ? renderDocumentCard("Driver's license", user.licenseNumberPhoto)
+      : '',
+  ]
+    .filter(Boolean)
+    .join('');
+
+  return `<div class="document-grid">${documents}</div>`;
+}
+
 async function callAdmin(path, options = {}) {
   if (!authToken) {
     throw new Error('Not signed in');
@@ -354,9 +400,25 @@ function renderPendingUsers(users) {
               <div class="item-title">${escapeHtml(user.name || 'Unnamed')}</div>
               <div class="item-sub">${escapeHtml(user.email || 'n/a')} • ${escapeHtml(user.userType || 'n/a')}</div>
               <div class="item-meta">
-                <span class="tag">Verification: ${escapeHtml(user.verificationStatus || 'pending')}</span>
+                <span class="tag">Verification: ${escapeHtml(verificationLabel(user.verificationStatus))}</span>
                 <span class="tag">User ID: ${escapeHtml(user.id)}</span>
+                ${
+                  user.phoneNumber
+                    ? `<span class="tag">Phone: ${escapeHtml(user.phoneNumber)}</span>`
+                    : ''
+                }
+                ${
+                  user.verificationSubmittedAt
+                    ? `<span class="tag">Submitted: ${escapeHtml(formatDate(user.verificationSubmittedAt))}</span>`
+                    : ''
+                }
               </div>
+              ${renderVerificationDocuments(user)}
+              ${
+                user.verificationNote
+                  ? `<div class="item-sub"><strong>Status note:</strong> ${escapeHtml(user.verificationNote)}</div>`
+                  : ''
+              }
               <div class="item-actions">
                 <button data-action="approve-user" data-user-id="${escapeHtml(user.id)}">Approve</button>
                 <button class="danger" data-action="reject-user" data-user-id="${escapeHtml(user.id)}">Reject</button>
@@ -440,14 +502,24 @@ function renderUsersManage(users) {
               <div class="item-title">${escapeHtml(user.name || 'Unnamed')}</div>
               <div class="item-sub">${escapeHtml(user.email || 'n/a')} • ${escapeHtml(user.userType || 'n/a')}</div>
               <div class="item-meta">
-                <span class="tag">Verification: ${escapeHtml(user.verificationStatus || 'pending')}</span>
+                <span class="tag">Verification: ${escapeHtml(verificationLabel(user.verificationStatus))}</span>
                 <span class="tag">Role: ${
                   user.isSuperAdmin ? 'Super admin' : user.isAdmin ? 'Admin' : 'Standard'
                 }</span>
                 <span class="tag">Joined: ${escapeHtml(formatDate(user.createdAt))}</span>
                 ${
+                  user.verificationSubmittedAt
+                    ? `<span class="tag">Submitted: ${escapeHtml(formatDate(user.verificationSubmittedAt))}</span>`
+                    : ''
+                }
+                ${
                   user.phoneNumber
                     ? `<span class="tag">Phone: ${escapeHtml(user.phoneNumber)}</span>`
+                    : ''
+                }
+                ${
+                  user.address
+                    ? `<span class="tag">Address: ${escapeHtml(user.address)}</span>`
                     : ''
                 }
                 ${
@@ -456,6 +528,12 @@ function renderUsersManage(users) {
                     : ''
                 }
               </div>
+              ${renderVerificationDocuments(user)}
+              ${
+                user.verificationNote
+                  ? `<div class="item-sub"><strong>Review note:</strong> ${escapeHtml(user.verificationNote)}</div>`
+                  : ''
+              }
               ${claimButtons}
             </article>
           `;
@@ -710,9 +788,12 @@ usersList.addEventListener('click', async (event) => {
 
   try {
     if (button.dataset.action === 'approve-user') {
+      const note =
+        window.prompt('Optional approval note for the user profile:', 'Approved by admin panel') ||
+        'Approved by admin panel';
       await callAdmin(`/api/admin/users/${userId}/verification`, {
         method: 'PATCH',
-        body: { status: 'approved', note: 'Approved by admin panel' },
+        body: { status: 'approved', note },
       });
       log(`Approved user ${userId}`);
       await loadPendingUsers();
@@ -721,9 +802,12 @@ usersList.addEventListener('click', async (event) => {
     }
 
     if (button.dataset.action === 'reject-user') {
+      const note =
+        window.prompt('Add a rejection note so the user knows what to fix:', 'Please upload clearer documents and resubmit.') ||
+        'Rejected by admin panel';
       await callAdmin(`/api/admin/users/${userId}/verification`, {
         method: 'PATCH',
-        body: { status: 'rejected', note: 'Rejected by admin panel' },
+        body: { status: 'rejected', note },
       });
       log(`Rejected user ${userId}`);
       await loadPendingUsers();

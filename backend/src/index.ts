@@ -58,6 +58,33 @@ const corsOrigins = (process.env.CORS_ORIGINS || '*')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+const verificationSubmittedStatuses = ['submitted', 'pending'] as const;
+const verificationReviewableStatuses = [
+  'not_submitted',
+  'submitted',
+  'pending',
+  'approved',
+  'rejected',
+] as const;
+
+const verificationUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  username: true,
+  phoneNumber: true,
+  truckType: true,
+  address: true,
+  verificationStatus: true,
+  verificationNote: true,
+  verificationSubmittedAt: true,
+  verificationReviewedAt: true,
+  userType: true,
+  idPhoto: true,
+  licenseNumberPhoto: true,
+  isAdmin: true,
+  isSuperAdmin: true,
+} satisfies Prisma.UserSelect;
 
 const emitRealtime = (room: string, event: string, payload: unknown) => {
   io?.to(room).emit(event, payload);
@@ -72,7 +99,7 @@ app.use(
     origin: corsOrigins.includes('*') ? true : corsOrigins,
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 
 const getMailer = () => {
   if (!smtpHost || !smtpUser || !smtpPass) {
@@ -96,7 +123,13 @@ const sanitizeUser = (user: {
   username?: string | null;
   phoneNumber?: string | null;
   truckType?: string | null;
+  address?: string | null;
   verificationStatus?: string | null;
+  verificationNote?: string | null;
+  verificationSubmittedAt?: Date | null;
+  verificationReviewedAt?: Date | null;
+  idPhoto?: string | null;
+  licenseNumberPhoto?: string | null;
   userType: string;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -107,7 +140,13 @@ const sanitizeUser = (user: {
   username: user.username ?? null,
   phoneNumber: user.phoneNumber ?? null,
   truckType: user.truckType ?? null,
-  verificationStatus: user.verificationStatus ?? 'pending',
+  address: user.address ?? null,
+  verificationStatus: user.verificationStatus ?? 'not_submitted',
+  verificationNote: user.verificationNote ?? null,
+  verificationSubmittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
+  verificationReviewedAt: user.verificationReviewedAt?.toISOString() ?? null,
+  idPhoto: user.idPhoto ?? null,
+  licenseNumberPhoto: user.licenseNumberPhoto ?? null,
   userType: user.userType,
   isAdmin: user.isAdmin,
   isSuperAdmin: user.isSuperAdmin,
@@ -115,6 +154,63 @@ const sanitizeUser = (user: {
 
 const asSingleParam = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? value[0] ?? '' : value ?? '';
+
+const isVerificationApproved = (status: string | null | undefined) =>
+  String(status || '')
+    .trim()
+    .toLowerCase() === 'approved';
+
+const requiredVerificationMessage = (userType: string) =>
+  userType === 'Driver'
+    ? 'Upload your national ID and driver\'s license from the Profile verification section, then submit them for admin approval before bidding.'
+    : 'Upload your national ID from the Profile verification section, then submit it for admin approval before posting loads.';
+
+const getRequiredVerificationDocs = (userType: string) =>
+  userType === 'Driver'
+    ? ['national_id', 'driver_license']
+    : ['national_id'];
+
+const requireApprovedVerification = async ({
+  userId,
+  expectedUserType,
+  res,
+}: {
+  userId: string;
+  expectedUserType: 'Cargo' | 'Driver';
+  res: Response;
+}) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      userType: true,
+      verificationStatus: true,
+    },
+  });
+
+  if (!user) {
+    res.status(404).json({ ok: false, error: 'User not found' });
+    return null;
+  }
+
+  if (user.userType !== expectedUserType) {
+    res.status(403).json({ ok: false, error: `Only ${expectedUserType.toLowerCase()} accounts can perform this action.` });
+    return null;
+  }
+
+  if (!isVerificationApproved(user.verificationStatus)) {
+    res.status(403).json({
+      ok: false,
+      error: requiredVerificationMessage(user.userType),
+      code: 'VERIFICATION_REQUIRED',
+      verificationStatus: user.verificationStatus ?? 'not_submitted',
+      requiredDocuments: getRequiredVerificationDocs(user.userType),
+    });
+    return null;
+  }
+
+  return user;
+};
 
 const signUserToken = (payload: { userId: string; email: string }) =>
   jwt.sign(payload, jwtSecret, { expiresIn: '7d' });
@@ -189,6 +285,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     const username = String(req.body?.username || '').trim();
     const phoneNumber = String(req.body?.phoneNumber || '').trim();
     const truckType = String(req.body?.truckType || '').trim();
+    const address = String(req.body?.address || '').trim();
 
     if (!email || !password || !name) {
       res.status(400).json({ ok: false, error: 'email, password, and name are required' });
@@ -211,19 +308,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         username: username.length === 0 ? null : username,
         phoneNumber: phoneNumber.length === 0 ? null : phoneNumber,
         truckType: truckType.length === 0 ? null : truckType,
+        address: address.length === 0 ? null : address,
+        verificationStatus: 'not_submitted',
       },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        username: true,
-        phoneNumber: true,
-        truckType: true,
-        verificationStatus: true,
-        userType: true,
-        isAdmin: true,
-        isSuperAdmin: true,
-      },
+      select: verificationUserSelect,
     });
 
     const token = signUserToken({ userId: user.id, email: user.email });
@@ -410,18 +498,7 @@ app.get('/api/auth/me', requireAuth, async (req: AuthedRequest, res: Response) =
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        username: true,
-        phoneNumber: true,
-        truckType: true,
-        verificationStatus: true,
-        userType: true,
-        isAdmin: true,
-        isSuperAdmin: true,
-      },
+      select: verificationUserSelect,
     });
 
     if (!user) {
@@ -481,6 +558,7 @@ app.get('/api/users', requireAuth, async (req: AuthedRequest, res: Response) => 
         profileImageUrl: true,
         ratingAverage: true,
         ratingCount: true,
+        verificationStatus: true,
       },
     });
 
@@ -494,6 +572,19 @@ app.get('/api/users', requireAuth, async (req: AuthedRequest, res: Response) => 
 app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = asSingleParam(req.params.userId);
+    const callerId = req.auth?.userId;
+
+    if (!callerId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const caller = await prisma.user.findUnique({
+      where: { id: callerId },
+      select: { isAdmin: true, isSuperAdmin: true },
+    });
+    const includeSensitiveVerification =
+      callerId === userId || Boolean(caller?.isAdmin || caller?.isSuperAdmin);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -501,15 +592,23 @@ app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Respo
         id: true,
         name: true,
         email: true,
+        phoneNumber: true,
         username: true,
         userType: true,
         profileImageUrl: true,
         bio: true,
         link: true,
         truckType: true,
+        address: true,
         licensePlate: true,
         licenseNumber: true,
         tradeLicense: true,
+        idPhoto: true,
+        licenseNumberPhoto: true,
+        verificationStatus: true,
+        verificationNote: true,
+        verificationSubmittedAt: true,
+        verificationReviewedAt: true,
         ratingAverage: true,
         ratingCount: true,
       },
@@ -520,9 +619,111 @@ app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Respo
       return;
     }
 
-    res.json({ ok: true, user });
+    res.json({
+      ok: true,
+      user: {
+        ...user,
+        idPhoto: includeSensitiveVerification ? user.idPhoto : null,
+        licenseNumberPhoto: includeSensitiveVerification ? user.licenseNumberPhoto : null,
+        verificationNote: includeSensitiveVerification ? user.verificationNote : null,
+        verificationSubmittedAt: includeSensitiveVerification
+          ? user.verificationSubmittedAt
+          : null,
+        verificationReviewedAt: includeSensitiveVerification
+          ? user.verificationReviewedAt
+          : null,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.put('/api/users/:userId/verification-documents', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = asSingleParam(req.params.userId);
+    const callerId = req.auth?.userId;
+    const nationalIdPhoto = String(req.body?.nationalIdPhoto || '').trim();
+    const driverLicensePhoto = String(req.body?.driverLicensePhoto || '').trim();
+    const submitForReview = Boolean(req.body?.submitForReview);
+
+    if (!callerId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    if (callerId !== userId) {
+      res.status(403).json({ ok: false, error: 'You can only update your own verification documents.' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        userType: true,
+        verificationStatus: true,
+        verificationNote: true,
+        verificationSubmittedAt: true,
+        verificationReviewedAt: true,
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ ok: false, error: 'User not found' });
+      return;
+    }
+
+    if (submitForReview) {
+      if (!nationalIdPhoto) {
+        res.status(400).json({ ok: false, error: 'National ID is required before submission.' });
+        return;
+      }
+
+      if (user.userType === 'Driver' && !driverLicensePhoto) {
+        res.status(400).json({ ok: false, error: 'Driver\'s license is required before submission.' });
+        return;
+      }
+    }
+
+    const shouldKeepApproved = isVerificationApproved(user.verificationStatus) && !submitForReview;
+    const nextStatus = submitForReview
+      ? 'submitted'
+      : shouldKeepApproved
+          ? 'approved'
+          : 'not_submitted';
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        idPhoto: nationalIdPhoto || null,
+        licenseNumberPhoto: user.userType === 'Driver'
+          ? (driverLicensePhoto || null)
+          : null,
+        verificationStatus: nextStatus,
+        verificationNote: submitForReview
+          ? 'Submitted for admin review'
+          : shouldKeepApproved
+              ? user.verificationNote
+              : null,
+        verificationSubmittedAt: submitForReview
+          ? new Date()
+          : shouldKeepApproved
+              ? user.verificationSubmittedAt
+              : null,
+        verificationReviewedAt: submitForReview
+          ? null
+          : shouldKeepApproved
+              ? user.verificationReviewedAt
+              : null,
+      },
+      select: verificationUserSelect,
+    });
+
+    res.json({ ok: true, user: sanitizeUser(updated) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update verification documents';
     res.status(500).json({ ok: false, error: message });
   }
 });
@@ -716,6 +917,15 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
       return;
     }
 
+    const verifiedCargoUser = await requireApprovedVerification({
+      userId,
+      expectedUserType: 'Cargo',
+      res,
+    });
+    if (!verifiedCargoUser) {
+      return;
+    }
+
     const startLocation = resolveEthiopiaLocation({
       city: req.body?.startCity ?? req.body?.start,
       zone: req.body?.startZone,
@@ -731,7 +941,7 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
 
     const thread = await prisma.thread.create({
       data: {
-        ownerId: userId,
+        ownerId: verifiedCargoUser.id,
         message: String(req.body?.message || ''),
         weight: req.body?.weight == null ? null : Number(req.body.weight),
         type: req.body?.type ?? null,
@@ -995,6 +1205,15 @@ app.put('/api/threads/:threadId/my-bid', requireAuth, async (req: AuthedRequest,
       return;
     }
 
+    const verifiedDriver = await requireApprovedVerification({
+      userId,
+      expectedUserType: 'Driver',
+      res,
+    });
+    if (!verifiedDriver) {
+      return;
+    }
+
     if (!Number.isFinite(amount) || amount <= 0) {
       res.status(400).json({ ok: false, error: 'amount must be greater than 0' });
       return;
@@ -1019,7 +1238,7 @@ app.put('/api/threads/:threadId/my-bid', requireAuth, async (req: AuthedRequest,
     const existing = await prisma.bid.findFirst({
       where: {
         loadId: threadId,
-        driverId: userId,
+        driverId: verifiedDriver.id,
       },
       orderBy: { createdAt: 'desc' },
       select: { id: true },
@@ -1047,7 +1266,7 @@ app.put('/api/threads/:threadId/my-bid', requireAuth, async (req: AuthedRequest,
       : await prisma.bid.create({
           data: {
             loadId: threadId,
-            driverId: userId,
+            driverId: verifiedDriver.id,
             amount,
             note,
             status: 'pending',
@@ -1757,7 +1976,8 @@ app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => 
       openDisputes,
       inReviewDisputes,
       resolvedDisputes,
-      pendingVerification,
+      notSubmittedVerification,
+      submittedVerification,
       approvedVerification,
       rejectedVerification,
       routeRows,
@@ -1788,7 +2008,8 @@ app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => 
       prisma.dispute.count({ where: { status: 'open' } }),
       prisma.dispute.count({ where: { status: 'in_review' } }),
       prisma.dispute.count({ where: { status: 'resolved' } }),
-      prisma.user.count({ where: { verificationStatus: 'pending' } }),
+      prisma.user.count({ where: { verificationStatus: 'not_submitted' } }),
+      prisma.user.count({ where: { verificationStatus: { in: [...verificationSubmittedStatuses] } } }),
       prisma.user.count({ where: { verificationStatus: 'approved' } }),
       prisma.user.count({ where: { verificationStatus: 'rejected' } }),
       prisma.thread.findMany({
@@ -1907,7 +2128,8 @@ app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => 
     ];
 
     const verificationBreakdown = [
-      { label: 'Pending', count: pendingVerification, tone: 'warning' },
+      { label: 'Not submitted', count: notSubmittedVerification, tone: 'neutral' },
+      { label: 'In review', count: submittedVerification, tone: 'warning' },
       { label: 'Approved', count: approvedVerification, tone: 'success' },
       { label: 'Rejected', count: rejectedVerification, tone: 'danger' },
     ];
@@ -2007,7 +2229,15 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     }
 
     if (verificationStatus) {
-      filters.push({ verificationStatus });
+      if (verificationStatus === 'submitted') {
+        filters.push({
+          verificationStatus: {
+            in: [...verificationSubmittedStatuses],
+          },
+        });
+      } else {
+        filters.push({ verificationStatus });
+      }
     }
 
     if (role === 'drivers') {
@@ -2031,9 +2261,14 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
         username: true,
         phoneNumber: true,
         truckType: true,
+        address: true,
         userType: true,
         verificationStatus: true,
         verificationNote: true,
+        verificationSubmittedAt: true,
+        verificationReviewedAt: true,
+        idPhoto: true,
+        licenseNumberPhoto: true,
         isAdmin: true,
         isSuperAdmin: true,
         createdAt: true,
@@ -2174,16 +2409,25 @@ app.get('/api/admin/loads', requireAuth, requireAdmin, async (req, res) => {
 app.get('/api/admin/users/pending-verification', requireAuth, requireAdmin, async (_req, res) => {
   try {
     const users = await prisma.user.findMany({
-      where: { verificationStatus: 'pending' },
+      where: {
+        verificationStatus: {
+          in: [...verificationSubmittedStatuses],
+        },
+      },
       select: {
         id: true,
         email: true,
         name: true,
+        phoneNumber: true,
         userType: true,
         verificationStatus: true,
         verificationNote: true,
+        verificationSubmittedAt: true,
+        verificationReviewedAt: true,
+        idPhoto: true,
+        licenseNumberPhoto: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { verificationSubmittedAt: 'asc' },
     });
 
     res.json({ ok: true, users });
@@ -2199,8 +2443,8 @@ app.patch('/api/admin/users/:userId/verification', requireAuth, requireAdmin, as
     const status = String(req.body?.status || '').trim();
     const note = req.body?.note == null ? null : String(req.body.note);
 
-    if (!['pending', 'approved', 'rejected'].includes(status)) {
-      res.status(400).json({ ok: false, error: 'status must be pending, approved, or rejected' });
+    if (!verificationReviewableStatuses.includes(status as (typeof verificationReviewableStatuses)[number])) {
+      res.status(400).json({ ok: false, error: 'status must be not_submitted, submitted, approved, or rejected' });
       return;
     }
 
@@ -2209,6 +2453,9 @@ app.patch('/api/admin/users/:userId/verification', requireAuth, requireAdmin, as
       data: {
         verificationStatus: status,
         verificationNote: note,
+        verificationReviewedAt: status === 'approved' || status === 'rejected'
+          ? new Date()
+          : null,
       },
       select: {
         id: true,
@@ -2217,6 +2464,10 @@ app.patch('/api/admin/users/:userId/verification', requireAuth, requireAdmin, as
         userType: true,
         verificationStatus: true,
         verificationNote: true,
+        verificationSubmittedAt: true,
+        verificationReviewedAt: true,
+        idPhoto: true,
+        licenseNumberPhoto: true,
       },
     });
 

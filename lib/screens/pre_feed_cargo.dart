@@ -7,6 +7,7 @@ import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/verification_access.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
 class PreFeedCargoScreen extends StatefulWidget {
@@ -174,7 +175,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                   ),
                   _HeroMetricData(
                     label: localizations.tr('profile'),
-                    value: 'Live',
+                    value: VerificationAccess.statusTitle(widget.user.verificationStatus),
                   ),
                 ],
               ),
@@ -199,7 +200,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                     child: _QuickActionCard(
                       icon: Icons.person_outline,
                       title: localizations.tr('profile'),
-                      subtitle: 'Review your account and notification preferences.',
+                      subtitle: 'Review your account, documents, and approval status.',
                       onTap: widget.onOpenProfile,
                     ),
                   ),

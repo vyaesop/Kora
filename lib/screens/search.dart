@@ -10,9 +10,11 @@ import '../utils/app_theme.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_http.dart';
 import '../utils/error_handler.dart';
+import '../utils/verification_access.dart';
 import '../widgets/thread_message.dart';
 import 'comment_screen.dart';
 import 'post_comment_screen.dart';
+import 'profile_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   final bool showSearchField;
@@ -29,7 +31,6 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   static const Color _ink = AppPalette.ink;
   static const Color _inkSoft = AppPalette.inkSoft;
-  static const Color _surface = AppPalette.surface;
   static const Color _card = AppPalette.card;
   static const Color _accent = AppPalette.accent;
   static const Color _accentWarm = AppPalette.accentWarm;
@@ -302,6 +303,33 @@ class _SearchScreenState extends State<SearchScreen> {
       _showClosed = false;
     });
     unawaited(_ensureVisibleResults());
+  }
+
+  Future<void> _openBidComposer(String threadId, bool alreadyBid) async {
+    final localizations = AppLocalizations.of(context);
+    if (alreadyBid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localizations.tr('bidAlreadyPlaced'))),
+      );
+      return;
+    }
+
+    final allowed = await VerificationAccess.ensureVerifiedForAction(
+      context,
+      expectedUserType: 'Driver',
+      actionLabel: 'bid on loads',
+      onOpenProfile: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        );
+      },
+    );
+    if (!allowed || !mounted) {
+      return;
+    }
+
+    setState(() => _threadDocForBid = threadId);
+    _panelController.open();
   }
 
   Widget _buildFilters(AppLocalizations localizations) {
@@ -712,23 +740,10 @@ class _SearchScreenState extends State<SearchScreen> {
                                                 onLike: () {},
                                                 onDisLike: () {},
                                                 onComment: () {
-                                                  if (alreadyBid) {
-                                                    ScaffoldMessenger.of(
-                                                            context)
-                                                        .showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          localizations.tr(
-                                                              'bidAlreadyPlaced'),
-                                                        ),
-                                                      ),
-                                                    );
-                                                    return;
-                                                  }
-                                                  setState(() =>
-                                                      _threadDocForBid =
-                                                          thread.docId);
-                                                  _panelController.open();
+                                                  _openBidComposer(
+                                                    thread.docId,
+                                                    alreadyBid,
+                                                  );
                                                 },
                                                 onProfileTap: () {},
                                                 panelController:

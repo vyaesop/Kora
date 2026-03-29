@@ -9,6 +9,7 @@ import 'package:kora/screens/home.dart';
 import 'package:kora/screens/login.dart';
 import 'package:kora/screens/reset_password.dart';
 import 'package:kora/utils/app_theme.dart';
+import 'package:kora/utils/session_preferences.dart';
 
 void main() {
   runApp(const ProviderScope(child: KoraApp()));
@@ -26,6 +27,7 @@ class _KoraAppState extends ConsumerState<KoraApp> {
   void initState() {
     super.initState();
     Future.microtask(_restoreThemeMode);
+    Future.microtask(_restoreLocale);
   }
 
   Future<void> _restoreThemeMode() async {
@@ -33,6 +35,12 @@ class _KoraAppState extends ConsumerState<KoraApp> {
     final raw = prefs.getString(themeModePreferenceKey);
     if (!mounted) return;
     ref.read(themeModeProvider.notifier).state = AppTheme.parseThemeMode(raw);
+  }
+
+  Future<void> _restoreLocale() async {
+    final locale = await SessionPreferences.getSavedLocale();
+    if (!mounted || locale == null) return;
+    ref.read(localeProvider.notifier).state = locale;
   }
 
   @override

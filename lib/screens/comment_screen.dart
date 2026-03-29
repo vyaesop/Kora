@@ -329,7 +329,7 @@ class _CommentScreenState extends State<CommentScreen> {
                           : '${localizations.tr('lastUpdated')}: ${_formatLastUpdated(_lastUpdated!, localizations)}',
                     ),
                     const SizedBox(height: 16),
-                    _SectionTitle(
+                    const _SectionTitle(
                       title: 'Shipment overview',
                       subtitle:
                           'A concise summary of the route and cargo details.',

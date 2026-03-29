@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 
+import '../screens/profile_screen.dart';
 import '../utils/backend_http.dart';
 import '../utils/firestore_service.dart';
 import '../utils/formatters.dart';
 import '../utils/app_theme.dart';
+import '../utils/verification_access.dart';
 import '../app_localizations.dart';
 
 class PostCommentScreen extends StatefulWidget {
@@ -108,6 +110,17 @@ class _PostCommentScreenState extends State<PostCommentScreen> {
 
   Future<void> submitBid() async {
     if (_isSubmitting) return;
+    final allowed = await VerificationAccess.ensureVerifiedForAction(
+      context,
+      expectedUserType: 'Driver',
+      actionLabel: 'bid on loads',
+      onOpenProfile: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        );
+      },
+    );
+    if (!allowed || !mounted) return;
     final localizations = AppLocalizations.of(context);
     final bidAmount =
         double.tryParse(commentController.text.replaceAll(',', '').trim());

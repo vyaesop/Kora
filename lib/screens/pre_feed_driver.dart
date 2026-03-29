@@ -7,6 +7,7 @@ import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/verification_access.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
 class PreFeedDriverScreen extends StatefulWidget {
@@ -182,7 +183,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                   ),
                   _HeroMetricData(
                     label: localizations.tr('profile'),
-                    value: 'Ready',
+                    value: VerificationAccess.statusTitle(widget.user.verificationStatus),
                   ),
                 ],
               ),
@@ -208,7 +209,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                     child: _QuickActionCard(
                       icon: Icons.badge_outlined,
                       title: localizations.tr('profile'),
-                      subtitle: 'Manage notifications and keep your account ready.',
+                      subtitle: 'Manage notifications and track verification progress.',
                       onTap: widget.onOpenProfile,
                     ),
                   ),

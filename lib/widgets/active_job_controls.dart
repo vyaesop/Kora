@@ -72,7 +72,7 @@ class ActiveJobControls extends StatelessWidget {
     final localizations = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final stages = const [
+    const stages = [
       'accepted',
       'driving_to_location',
       'picked_up',

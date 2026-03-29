@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:kora/screens/home.dart';
+import 'package:kora/screens/language_selection_screen.dart';
 import 'package:kora/screens/login.dart';
+import 'package:kora/utils/session_preferences.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 
 class AuthCheckScreen extends StatefulWidget {
@@ -30,9 +32,15 @@ class _AuthCheckScreenState extends State<AuthCheckScreen> {
         MaterialPageRoute(builder: (_) => const Home()),
       );
     } else {
+      final hasSelectedLanguage = await SessionPreferences.hasSelectedLanguage();
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(
+          builder: (_) => hasSelectedLanguage
+              ? const LoginScreen()
+              : const LanguageSelectionScreen(),
+        ),
       );
     }
   }

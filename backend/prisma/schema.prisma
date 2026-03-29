@@ -17,11 +17,14 @@ model User {
   profileImageUrl         String?
   bio                     String?
   link                    String?
+  address                 String?
   
   userType                String
   
-  verificationStatus      String    @default("pending")
+  verificationStatus      String    @default("not_submitted")
   verificationNote        String?
+  verificationSubmittedAt DateTime?
+  verificationReviewedAt  DateTime?
 
   truckType               String?
   licensePlate            String?

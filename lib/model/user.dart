@@ -59,7 +59,7 @@ class UserModel {
     this.address, // Add this line
     this.termsAccepted = false,
     this.privacyAccepted = false,
-    this.verificationStatus = 'pending',
+    this.verificationStatus = 'not_submitted',
   });
 
   Map<String, dynamic> toMap() {
@@ -122,7 +122,7 @@ class UserModel {
       address: map['address'] != null ? map['address'] as String : null, // Add this line
       termsAccepted: map['termsAccepted'] == true,
       privacyAccepted: map['privacyAccepted'] == true,
-      verificationStatus: (map['verificationStatus'] ?? 'pending').toString(),
+      verificationStatus: (map['verificationStatus'] ?? 'not_submitted').toString(),
     );
   }
 

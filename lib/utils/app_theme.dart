@@ -60,7 +60,7 @@ class AppTheme {
           fontWeight: FontWeight.w700,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: AppPalette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -133,17 +133,17 @@ class AppTheme {
         contentTextStyle: GoogleFonts.manrope(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) return AppPalette.ink;
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppPalette.ink;
           return Colors.white;
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return AppPalette.accent.withAlpha((0.45 * 255).round());
           }
           return Colors.grey.shade300;
@@ -156,7 +156,6 @@ class AppTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppPalette.accent,
       brightness: Brightness.dark,
-      background: AppPalette.darkSurface,
       surface: AppPalette.darkCard,
     );
     final textTheme = GoogleFonts.manropeTextTheme(
@@ -190,7 +189,7 @@ class AppTheme {
           fontWeight: FontWeight.w700,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         color: AppPalette.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -206,7 +205,7 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppPalette.darkOutline),
+          borderSide: const BorderSide(color: AppPalette.darkOutline),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -267,17 +266,17 @@ class AppTheme {
         contentTextStyle: GoogleFonts.manrope(color: AppPalette.darkText),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppPalette.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) return AppPalette.accent;
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppPalette.accent;
           return AppPalette.darkText;
         }),
-        trackColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return AppPalette.accent.withAlpha((0.35 * 255).round());
           }
           return AppPalette.darkOutline;

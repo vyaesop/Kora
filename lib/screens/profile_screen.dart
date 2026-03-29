@@ -4,10 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:kora/app_localizations.dart';
 import 'package:kora/model/thread_message.dart';
+import 'package:kora/screens/verification_documents_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/error_handler.dart';
+import 'package:kora/utils/verification_access.dart';
+import 'package:kora/widgets/document_image.dart';
 import 'package:kora/widgets/profile_avatar.dart';
 import 'package:kora/widgets/thread_message.dart';
 import 'comment_screen.dart';
@@ -173,6 +176,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
+  Future<void> _openVerification() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => const VerificationDocumentsScreen(),
+      ),
+    );
+    if (changed == true) {
+      await _load();
+    }
+  }
+
   Widget _threadList(List<ThreadMessage> threads) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (threads.isEmpty) {
@@ -242,10 +256,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = _user ?? const <String, dynamic>{};
     final ratingAvg = (user['ratingAverage'] as num?)?.toDouble() ?? 0;
     final ratingCount = (user['ratingCount'] as num?)?.toInt() ?? 0;
-    final verification = (user['verificationStatus'] ?? 'pending').toString();
+    final verification =
+        VerificationAccess.normalizeStatus(user['verificationStatus']?.toString());
     final userType = (user['userType'] ?? 'Cargo').toString();
     final address = user['address']?.toString();
     final truckType = user['truckType']?.toString();
+    final verificationNote = user['verificationNote']?.toString();
+    final nationalIdPhoto = user['idPhoto']?.toString();
+    final driverLicensePhoto = user['licenseNumberPhoto']?.toString();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor =
         isDark ? AppPalette.darkCard : Colors.white;
@@ -326,7 +344,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     runSpacing: 8,
                     children: [
                       _HeroChip(label: userType),
-                      _HeroChip(label: 'Verification: $verification'),
+                      _HeroChip(
+                        label:
+                            'Verification: ${VerificationAccess.statusTitle(verification)}',
+                      ),
                       _HeroChip(
                         label:
                             '${localizations.tr('ratingLabel')}: ${ratingAvg.toStringAsFixed(1)} ($ratingCount)',
@@ -355,7 +376,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            _SectionTitle(
+            const _SectionTitle(
               title: 'Account details',
               subtitle: 'Important profile information at a glance.',
             ),
@@ -369,11 +390,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _InfoRow(label: 'Address', value: address),
                 if (truckType != null && truckType.isNotEmpty)
                   _InfoRow(label: localizations.tr('truckTypeLabel'), value: truckType),
-                _InfoRow(label: 'Verification status', value: verification),
+                _InfoRow(
+                  label: 'Verification status',
+                  value: VerificationAccess.statusTitle(verification),
+                ),
               ],
             ),
             const SizedBox(height: 18),
-            _SectionTitle(
+            const _SectionTitle(
+              title: 'Verification',
+              subtitle: 'Upload the required documents and monitor admin review.',
+            ),
+            const SizedBox(height: 10),
+            _InfoCard(
+              color: cardColor,
+              borderColor: cardBorder,
+              children: [
+                _VerificationSummaryCard(
+                  userType: userType,
+                  status: verification,
+                  note: verificationNote,
+                  nationalIdPhoto: nationalIdPhoto,
+                  driverLicensePhoto: driverLicensePhoto,
+                  onOpenVerification: _openVerification,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            const _SectionTitle(
               title: 'Settings',
               subtitle: 'Notification and account preferences saved on this device.',
             ),
@@ -649,6 +693,165 @@ class _SettingsTile extends StatelessWidget {
               color: Colors.black54,
               height: 1.4,
             ),
+      ),
+    );
+  }
+}
+
+class _VerificationSummaryCard extends StatelessWidget {
+  final String userType;
+  final String status;
+  final String? note;
+  final String? nationalIdPhoto;
+  final String? driverLicensePhoto;
+  final VoidCallback onOpenVerification;
+
+  const _VerificationSummaryCard({
+    required this.userType,
+    required this.status,
+    required this.note,
+    required this.nationalIdPhoto,
+    required this.driverLicensePhoto,
+    required this.onOpenVerification,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final statusColor = switch (VerificationAccess.normalizeStatus(status)) {
+      'approved' => const Color(0xFF16A34A),
+      'submitted' => const Color(0xFFF59E0B),
+      'rejected' => const Color(0xFFDC2626),
+      _ => const Color(0xFF0EA5E9),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: statusColor.withAlpha(((isDark ? 0.24 : 0.10) * 255).round()),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                VerificationAccess.statusTitle(status),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                VerificationAccess.statusDescription(
+                  userType: userType,
+                  status: status,
+                  note: note,
+                ),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Required documents',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 10),
+        _DocumentStatusRow(
+          title: 'National ID',
+          isUploaded: (nationalIdPhoto ?? '').trim().isNotEmpty,
+          imageSource: nationalIdPhoto,
+        ),
+        if (userType == 'Driver') ...[
+          const SizedBox(height: 10),
+          _DocumentStatusRow(
+            title: 'Driver\'s license',
+            isUploaded: (driverLicensePhoto ?? '').trim().isNotEmpty,
+            imageSource: driverLicensePhoto,
+          ),
+        ],
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: onOpenVerification,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: Text(
+              VerificationAccess.normalizeStatus(status) == 'approved'
+                  ? 'Review documents'
+                  : 'Open verification',
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DocumentStatusRow extends StatelessWidget {
+  final String title;
+  final bool isUploaded;
+  final String? imageSource;
+
+  const _DocumentStatusRow({
+    required this.title,
+    required this.isUploaded,
+    required this.imageSource,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: DocumentImage(source: imageSource, borderRadius: 14),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isUploaded ? 'Uploaded' : 'Missing',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isUploaded
+                            ? const Color(0xFF16A34A)
+                            : (isDark
+                                ? AppPalette.darkTextSoft
+                                : const Color(0xFF64748B)),
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

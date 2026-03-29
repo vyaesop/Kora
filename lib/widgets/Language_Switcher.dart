@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../app_localizations.dart';
+import '../utils/session_preferences.dart';
 
 class LanguageSwitcher extends ConsumerWidget {
   const LanguageSwitcher({super.key});
@@ -19,7 +20,10 @@ class LanguageSwitcher extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     return PopupMenuButton<Locale>(
       tooltip: localizations.tr('language'),
-      onSelected: (value) => ref.read(localeProvider.notifier).state = value,
+      onSelected: (value) async {
+        ref.read(localeProvider.notifier).state = value;
+        await SessionPreferences.saveLocale(value);
+      },
       itemBuilder: (context) => AppLocalizations.supportedLocales
           .map(
             (supported) => PopupMenuItem<Locale>(

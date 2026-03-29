@@ -6,6 +6,8 @@ import '../utils/backend_http.dart';
 import '../utils/ethiopia_locations.dart';
 import '../utils/error_handler.dart';
 import '../utils/notification_helper.dart';
+import '../utils/verification_access.dart';
+import 'profile_screen.dart';
 
 class PostScreen extends StatefulWidget {
   const PostScreen({super.key});
@@ -81,6 +83,17 @@ class _PostScreenState extends State<PostScreen> {
 
   Future<void> _submit() async {
     if (_submitting) return;
+    final allowed = await VerificationAccess.ensureVerifiedForAction(
+      context,
+      expectedUserType: 'Cargo',
+      actionLabel: 'post loads',
+      onOpenProfile: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        );
+      },
+    );
+    if (!allowed || !mounted) return;
     if (!_formKey.currentState!.validate()) return;
 
     final weight = double.tryParse(_weightController.text.trim());

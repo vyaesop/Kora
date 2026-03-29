@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 
+import '../screens/profile_screen.dart';
 import '../utils/app_theme.dart';
 import '../utils/backend_http.dart';
 import '../utils/formatters.dart';
+import '../utils/verification_access.dart';
 import '../app_localizations.dart';
 
 class PlaceBidWidget extends StatefulWidget {
@@ -104,6 +106,17 @@ class _PlaceBidWidgetState extends State<PlaceBidWidget> {
   }
 
   Future<void> _placeBid() async {
+    final allowed = await VerificationAccess.ensureVerifiedForAction(
+      context,
+      expectedUserType: 'Driver',
+      actionLabel: 'bid on loads',
+      onOpenProfile: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+        );
+      },
+    );
+    if (!allowed || !mounted) return;
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     final localizations = AppLocalizations.of(context);
