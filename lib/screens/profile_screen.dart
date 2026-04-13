@@ -16,7 +16,12 @@ import 'package:kora/widgets/thread_message.dart';
 import 'comment_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
-  const ProfileScreen({super.key});
+  final Future<void> Function()? onReplayTour;
+
+  const ProfileScreen({
+    super.key,
+    this.onReplayTour,
+  });
 
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
@@ -473,6 +478,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     _updatePreference(_marketingUpdatesKey, value);
                   },
                 ),
+                if (widget.onReplayTour != null) ...[
+                  const Divider(height: 24),
+                  _SettingsActionTile(
+                    title: localizations.tr('tourReplayTitle'),
+                    subtitle: localizations.tr('tourReplaySubtitle'),
+                    icon: Icons.map_outlined,
+                    onTap: widget.onReplayTour!,
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 18),
@@ -694,6 +708,52 @@ class _SettingsTile extends StatelessWidget {
               height: 1.4,
             ),
       ),
+    );
+  }
+}
+
+class _SettingsActionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Future<void> Function() onTap;
+
+  const _SettingsActionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFFDBEAFE),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(icon, color: const Color(0xFF1D4ED8)),
+      ),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+              height: 1.4,
+            ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () async => onTap(),
     );
   }
 }

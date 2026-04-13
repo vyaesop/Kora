@@ -54,7 +54,7 @@ function getErrorMessage(error) {
     return 'unknown_error';
 }
 function applyCors(req, res) {
-    const origin = req.headers.origin;
+    const origin = req.get('origin');
     if (origin && (allowedOrigins.has(origin) || origin.endsWith('.vercel.app'))) {
         res.set('Access-Control-Allow-Origin', origin);
         res.set('Vary', 'Origin');
@@ -68,7 +68,7 @@ function applyCors(req, res) {
     return false;
 }
 async function requireAdmin(req) {
-    const auth = req.headers.authorization;
+    const auth = req.get('authorization');
     if (!auth || !auth.startsWith('Bearer ')) {
         throw new Error('unauthorized');
     }

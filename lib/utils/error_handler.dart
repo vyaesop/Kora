@@ -3,11 +3,26 @@ import 'dart:io';
 class ErrorHandler {
   static String getMessage(Object error) {
     String message = error.toString();
-    
+
     if (error is SocketException) {
+      final socketMessage = error.message.toLowerCase();
+      if (socketMessage.contains('connection refused') ||
+          socketMessage.contains('connection failed') ||
+          socketMessage.contains('network is unreachable') ||
+          socketMessage.contains('failed host lookup')) {
+        return 'Could not reach the server. Please try again in a moment.';
+      }
       return 'No internet connection. Please check your network.';
     }
-    
+
+    final lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.contains('connection refused') ||
+        lowerMessage.contains('connection failed') ||
+        lowerMessage.contains('failed host lookup')) {
+      return 'Could not reach the server. Please try again in a moment.';
+    }
+
     if (message.contains('SocketException')) {
       return 'No internet connection. Please check your network.';
     }

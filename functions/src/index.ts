@@ -34,7 +34,7 @@ type BidSnapshotData = {
 };
 
 function applyCors(req: Request, res: Response): boolean {
-  const origin = req.headers.origin;
+  const origin = req.get('origin');
   if (origin && (allowedOrigins.has(origin) || origin.endsWith('.vercel.app'))) {
     res.set('Access-Control-Allow-Origin', origin);
     res.set('Vary', 'Origin');
@@ -51,7 +51,7 @@ function applyCors(req: Request, res: Response): boolean {
 }
 
 async function requireAdmin(req: Request): Promise<AdminAuthContext> {
-  const auth = req.headers.authorization;
+  const auth = req.get('authorization');
   if (!auth || !auth.startsWith('Bearer ')) {
     throw new Error('unauthorized');
   }

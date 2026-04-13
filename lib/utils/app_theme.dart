@@ -60,7 +60,7 @@ class AppTheme {
           fontWeight: FontWeight.w700,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: ThemeData.light().cardTheme.copyWith(
         elevation: 0,
         color: AppPalette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -133,17 +133,17 @@ class AppTheme {
         contentTextStyle: GoogleFonts.manrope(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      dialogTheme: DialogThemeData(
+      dialogTheme: ThemeData.light().dialogTheme.copyWith(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppPalette.ink;
+        thumbColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) return AppPalette.ink;
           return Colors.white;
         }),
-        trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
+        trackColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
             return AppPalette.accent.withAlpha((0.45 * 255).round());
           }
           return Colors.grey.shade300;
@@ -189,7 +189,7 @@ class AppTheme {
           fontWeight: FontWeight.w700,
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: ThemeData.dark().cardTheme.copyWith(
         elevation: 0,
         color: AppPalette.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -266,17 +266,17 @@ class AppTheme {
         contentTextStyle: GoogleFonts.manrope(color: AppPalette.darkText),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      dialogTheme: DialogThemeData(
+      dialogTheme: ThemeData.dark().dialogTheme.copyWith(
         backgroundColor: AppPalette.darkCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppPalette.accent;
+        thumbColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) return AppPalette.accent;
           return AppPalette.darkText;
         }),
-        trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
+        trackColor: MaterialStateProperty.resolveWith((states) {
+          if (states.contains(MaterialState.selected)) {
             return AppPalette.accent.withAlpha((0.35 * 255).round());
           }
           return AppPalette.darkOutline;

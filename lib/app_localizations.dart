@@ -310,6 +310,48 @@ class AppLocalizations {
       'Oct': 'Oct',
       'Nov': 'Nov',
       'Dec': 'Dec',
+      'tourQuickTitle': 'Quick tour',
+      'tourQuickSubtitle':
+          'A guided walkthrough of the places you will use most in your first sessions.',
+      'tourStepLabel': 'Step',
+      'tourSkip': 'Skip',
+      'tourBack': 'Back',
+      'tourNext': 'Next',
+      'tourStartExploring': 'Start exploring',
+      'tourReplayTitle': 'Replay quick tour',
+      'tourReplaySubtitle':
+          'Walk through the key tabs, guided actions, and verification steps again.',
+      'tourOpenHome': 'Open home',
+      'tourOpenFeed': 'Open feed',
+      'tourOpenMyBids': 'Open my bids',
+      'tourOpenVerification': 'Open verification',
+      'tourOpenPost': 'Open post load',
+      'tourCargoHomeTitle': 'Home keeps the day organized',
+      'tourCargoHomeBody':
+          'Start on Home to see quick actions, recent loads, and suggested drivers without hunting through tabs.',
+      'tourCargoFeedTitle': 'Feed shows the live market',
+      'tourCargoFeedBody':
+          'Browse fresh route activity in Feed when you want a wider view before posting a load.',
+      'tourCargoVerificationTitle': 'Verification unlocks posting',
+      'tourCargoVerificationBody':
+          'Upload your national ID and track approval so posting stays smooth once you are ready to publish.',
+      'tourCargoPostTitle': 'Post loads from one clear action',
+      'tourCargoPostReadyBody':
+          'Once approved, use the post action to publish a load and start collecting bids quickly.',
+      'tourCargoPostLockedBody':
+          'Your post action is ready, but verification needs approval first. Open verification now so posting is unlocked.',
+      'tourDriverHomeTitle': 'Home surfaces your next jobs',
+      'tourDriverHomeBody':
+          'Use Home for suggested loads, active work, and shortcuts when you want the fastest overview.',
+      'tourDriverFeedTitle': 'Feed is where discovery happens',
+      'tourDriverFeedBody':
+          'Open Feed to scan fresh loads, compare routes, and jump into the ones that fit your truck.',
+      'tourDriverBidsTitle': 'My Bids keeps offers organized',
+      'tourDriverBidsBody':
+          'Track every pending or accepted offer in one place so you can follow up without digging back through the feed.',
+      'tourDriverVerificationTitle': 'Verification unlocks bidding',
+      'tourDriverVerificationBody':
+          'Upload your national ID and driver\'s license to unlock bidding and keep your profile ready for approval.',
 
       // ...add more as needed
     },
