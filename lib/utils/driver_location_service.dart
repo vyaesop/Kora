@@ -7,11 +7,14 @@ import 'package:flutter/foundation.dart';
 
 import 'backend_auth_service.dart';
 import 'backend_config.dart';
+import 'ethiopia_locations.dart';
+import 'session_preferences.dart';
 
 class DriverLocationService {
   final String driverId;
   StreamSubscription<Position>? _positionStream;
   final BackendAuthService _authService = BackendAuthService();
+  String? _lastCity;
 
   DriverLocationService(this.driverId);
 
@@ -29,10 +32,20 @@ class DriverLocationService {
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 50,
       ),
     ).listen((Position position) async {
       try {
+        final match = findNearestEthiopiaCity(
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        final cityName = match?.city.city;
+        if (cityName != null && cityName.isNotEmpty && cityName != _lastCity) {
+          _lastCity = cityName;
+          await SessionPreferences.saveDriverCity(cityName);
+        }
+
         final token = await _authService.getToken();
         if (token == null || token.isEmpty) {
           debugPrint('Driver location upload skipped: no auth token');

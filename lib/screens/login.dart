@@ -6,8 +6,7 @@ import '../widgets/language_switcher.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/error_handler.dart';
 import 'reset_password.dart';
-
-import 'signup.dart';
+import 'phone_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,16 +18,14 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _authService = BackendAuthService();
   final _formKey = GlobalKey<FormState>();
-  final emailController = TextEditingController();
+  final phoneController = TextEditingController();
   final passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isSubmitting = false;
 
-  String? _validateEmail(String? value, AppLocalizations appLocalizations) {
+  String? _validatePhone(String? value, AppLocalizations appLocalizations) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) return appLocalizations.tr('required');
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-    if (!emailRegex.hasMatch(trimmed)) return appLocalizations.tr('invalidEmail');
     return null;
   }
 
@@ -41,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    emailController.dispose();
+    phoneController.dispose();
     passwordController.dispose();
     super.dispose();
   }
@@ -49,13 +46,13 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> login() async {
     if (!mounted) return;
     if (!_formKey.currentState!.validate()) return;
-    final email = emailController.text.trim();
+    final phoneNumber = phoneController.text.trim();
     final password = passwordController.text.trim();
 
     setState(() => _isSubmitting = true);
     try {
       await _authService.login(
-        email: email,
+        phoneNumber: phoneNumber,
         password: password,
       );
       if (mounted) {
@@ -80,77 +77,6 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isSubmitting = false);
       }
     }
-  }
-
-  Future<void> _showResetDialog() async {
-    final appLocalizations = AppLocalizations.of(context);
-    final controller = TextEditingController(text: emailController.text.trim());
-    final messenger = ScaffoldMessenger.of(context);
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(appLocalizations.tr('forgotPasswordTitle')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(appLocalizations.tr('forgotPasswordBody')),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              decoration: InputDecoration(
-                labelText: appLocalizations.tr('emailLabel'),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(appLocalizations.tr('cancel')),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const ResetPasswordScreen(),
-                ),
-              );
-            },
-            child: Text(appLocalizations.tr('resetPasswordTitle')),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final email = controller.text.trim();
-              final error = _validateEmail(email, appLocalizations);
-              if (error != null) {
-                messenger.showSnackBar(SnackBar(content: Text(error)));
-                return;
-              }
-              try {
-                await _authService.requestPasswordReset(email: email);
-                if (!context.mounted) return;
-                Navigator.of(context).pop();
-                messenger.showSnackBar(
-                  SnackBar(content: Text(appLocalizations.tr('resetEmailSent'))),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                Navigator.of(context).pop();
-                 final errorMessage = ErrorHandler.getMessage(e);
-                messenger.showSnackBar(
-                  SnackBar(content: Text(errorMessage)),
-                );
-              }
-            },
-            child: Text(appLocalizations.tr('sendResetLink')),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -224,16 +150,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Column(
                             children: [
                               TextFormField(
-                                controller: emailController,
-                                keyboardType: TextInputType.emailAddress,
+                                controller: phoneController,
+                                keyboardType: TextInputType.phone,
                                 textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.email],
+                                autofillHints: const [
+                                  AutofillHints.telephoneNumber
+                                ],
                                 validator: (value) =>
-                                    _validateEmail(value, appLocalizations),
+                                    _validatePhone(value, appLocalizations),
                                 decoration: InputDecoration(
-                                  labelText: appLocalizations.tr('emailLabel'),
-                                  hintText: appLocalizations.tr('email'),
-                                  prefixIcon: const Icon(Icons.alternate_email),
+                                  labelText: appLocalizations.tr('phoneLabel'),
+                                  hintText: appLocalizations.tr('phone'),
+                                  prefixIcon: const Icon(Icons.phone_outlined),
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -264,14 +192,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const ResetPasswordScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Text(appLocalizations.tr('forgotPassword')),
+                                ),
+                              ),
                             ],
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _showResetDialog,
-                            child: Text(appLocalizations.tr('forgotPassword')),
                           ),
                         ),
                         SizedBox(
@@ -299,7 +233,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (context) => const SignupScreen()),
+                                      builder: (context) =>
+                                          const PhoneVerificationScreen()),
                                 );
                               },
                               child: Text(
@@ -321,4 +256,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-

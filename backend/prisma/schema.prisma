@@ -12,7 +12,7 @@ model User {
   email                   String    @unique
   passwordHash            String
   name                    String
-  phoneNumber             String?
+  phoneNumber             String?   @unique
   username                String?   @unique
   profileImageUrl         String?
   bio                     String?
@@ -204,4 +204,28 @@ model PasswordResetToken {
 
   @@index([userId, expiresAt])
   @@index([tokenHash])
+}
+
+model TelegramContact {
+  id             String   @id @default(uuid())
+  phoneNumber    String   @unique
+  chatId         String
+  telegramUserId String?
+  firstName      String?
+  lastName       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([phoneNumber])
+}
+
+model PhoneOtp {
+  id          String   @id @default(uuid())
+  phoneNumber String
+  codeHash    String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([phoneNumber, expiresAt])
 }

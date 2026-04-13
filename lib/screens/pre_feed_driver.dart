@@ -6,7 +6,9 @@ import 'package:kora/screens/comment_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
+import 'package:kora/utils/ethiopia_locations.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/session_preferences.dart';
 import 'package:kora/utils/verification_access.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
@@ -47,14 +49,21 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
       auth: false,
       cacheTtl: const Duration(seconds: 20),
     );
-    return (data['threads'] as List<dynamic>? ?? const [])
+    final threads = (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where(
           (thread) => (thread['deliveryStatus'] ?? 'pending_bids').toString() ==
               'pending_bids',
         )
-        .take(4)
         .toList();
+    final driverCity = await SessionPreferences.getDriverCity();
+    if (driverCity != null && driverCity.trim().isNotEmpty) {
+      final normalized = _normalizeCity(driverCity);
+      threads.sort((a, b) =>
+          _cityMatchScore(b, normalized).compareTo(_cityMatchScore(a, normalized)));
+    }
+
+    return threads.take(4).toList();
   }
 
   Future<List<Map<String, dynamic>>> _fetchAcceptedLoads() async {
@@ -101,6 +110,25 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
       endLng: (row['endLng'] as num?)?.toDouble() ?? 0.0,
       deliveryStatus: row['deliveryStatus']?.toString(),
     );
+  }
+
+  String _normalizeCity(String raw) {
+    final matched = findEthiopiaCity(raw);
+    return (matched?.city ?? raw).trim().toLowerCase();
+  }
+
+  int _cityMatchScore(Map<String, dynamic> thread, String driverCity) {
+    final startRaw =
+        (thread['startCity'] ?? thread['start'] ?? '').toString().trim();
+    final endRaw =
+        (thread['endCity'] ?? thread['end'] ?? '').toString().trim();
+    final start = startRaw.isEmpty ? '' : _normalizeCity(startRaw);
+    final end = endRaw.isEmpty ? '' : _normalizeCity(endRaw);
+
+    if (driverCity.isEmpty) return 0;
+    if (start == driverCity || end == driverCity) return 2;
+    if (start.contains(driverCity) || end.contains(driverCity)) return 1;
+    return 0;
   }
 
   void _openLoadDetails(BuildContext context, Map<String, dynamic> row) {

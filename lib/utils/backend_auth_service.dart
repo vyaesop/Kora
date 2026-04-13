@@ -32,7 +32,9 @@ class BackendAuthService {
     return UserModel(
       id: (payload['id'] ?? '').toString(),
       name: (payload['name'] ?? '').toString(),
-      username: (payload['username'] ?? payload['email'] ?? '').toString(),
+      username:
+          (payload['username'] ?? payload['phoneNumber'] ?? payload['email'] ?? '')
+              .toString(),
       followers: const [],
       following: const [],
       profileImageUrl: payload['profileImageUrl']?.toString(),
@@ -50,12 +52,15 @@ class BackendAuthService {
     );
   }
 
-  Future<UserModel> login({required String email, required String password}) async {
+  Future<UserModel> login({
+    required String phoneNumber,
+    required String password,
+  }) async {
     final data = await _request(
       path: '/api/auth/login',
       method: 'POST',
       body: {
-        'email': email,
+        'phoneNumber': phoneNumber,
         'password': password,
       },
     );
@@ -67,12 +72,11 @@ class BackendAuthService {
   }
 
   Future<UserModel> register({
-    required String email,
+    required String phoneNumber,
     required String password,
     required String name,
     required String userType,
     String? username,
-    String? phoneNumber,
     String? truckType,
     String? address,
   }) async {
@@ -80,12 +84,11 @@ class BackendAuthService {
       path: '/api/auth/register',
       method: 'POST',
       body: {
-        'email': email,
+        'phoneNumber': phoneNumber,
         'password': password,
         'name': name,
         'userType': userType,
         'username': username,
-        'phoneNumber': phoneNumber,
         'truckType': truckType,
         'address': address,
       },
@@ -97,25 +100,25 @@ class BackendAuthService {
     return _toUserModel(userMap);
   }
 
-  Future<void> requestPasswordReset({required String email}) async {
+  Future<void> requestPasswordReset({required String phoneNumber}) async {
     await _request(
       path: '/api/auth/forgot-password',
       method: 'POST',
-      body: {'email': email},
+      body: {'phoneNumber': phoneNumber},
     );
   }
 
   Future<void> resetPassword({
-    required String email,
-    required String token,
+    required String phoneNumber,
+    required String code,
     required String newPassword,
   }) async {
     await _request(
       path: '/api/auth/reset-password',
       method: 'POST',
       body: {
-        'email': email,
-        'token': token,
+        'phoneNumber': phoneNumber,
+        'code': code,
         'password': newPassword,
       },
     );

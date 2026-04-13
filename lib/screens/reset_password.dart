@@ -4,13 +4,13 @@ import '../app_localizations.dart';
 import '../utils/backend_auth_service.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
-  final String? initialEmail;
-  final String? initialToken;
+  final String? initialPhone;
+  final String? initialCode;
 
   const ResetPasswordScreen({
     super.key,
-    this.initialEmail,
-    this.initialToken,
+    this.initialPhone,
+    this.initialCode,
   });
 
   @override
@@ -20,34 +20,33 @@ class ResetPasswordScreen extends StatefulWidget {
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _authService = BackendAuthService();
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _tokenController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _submitting = false;
   bool _obscure = true;
+  bool _sendingCode = false;
 
   @override
   void initState() {
     super.initState();
-    _emailController.text = widget.initialEmail ?? '';
-    _tokenController.text = widget.initialToken ?? '';
+    _phoneController.text = widget.initialPhone ?? '';
+    _codeController.text = widget.initialCode ?? '';
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _tokenController.dispose();
+    _phoneController.dispose();
+    _codeController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value, AppLocalizations localizations) {
+  String? _validatePhone(String? value, AppLocalizations localizations) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) return localizations.tr('required');
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-    if (!emailRegex.hasMatch(trimmed)) return localizations.tr('invalidEmail');
     return null;
   }
 
@@ -73,8 +72,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _submitting = true);
     try {
       await _authService.resetPassword(
-        email: _emailController.text.trim(),
-        token: _tokenController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
+        code: _codeController.text.trim(),
         newPassword: password,
       );
       if (!mounted) return;
@@ -92,6 +91,37 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _sendCode() async {
+    final localizations = AppLocalizations.of(context);
+    final phone = _phoneController.text.trim();
+    final phoneError = _validatePhone(phone, localizations);
+    if (phoneError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(phoneError)),
+      );
+      return;
+    }
+
+    setState(() => _sendingCode = true);
+    try {
+      await _authService.requestPasswordReset(phoneNumber: phone);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(localizations.tr('otpSent'))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '${localizations.tr('passwordResetFailed')}${e.toString().replaceFirst('Exception: ', '')}'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingCode = false);
     }
   }
 
@@ -126,25 +156,40 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
+                            controller: _phoneController,
+                            keyboardType: TextInputType.phone,
                             validator: (value) =>
-                                _validateEmail(value, localizations),
+                                _validatePhone(value, localizations),
                             decoration: InputDecoration(
-                              labelText: localizations.tr('emailLabel'),
-                              hintText: localizations.tr('email'),
-                              prefixIcon: const Icon(Icons.alternate_email),
+                              labelText: localizations.tr('phoneLabel'),
+                              hintText: localizations.tr('phone'),
+                              prefixIcon: const Icon(Icons.phone_outlined),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 46,
+                            child: ElevatedButton(
+                              onPressed: _sendingCode ? null : _sendCode,
+                              child: _sendingCode
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child:
+                                          CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : Text(localizations.tr('sendOtp')),
                             ),
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
-                            controller: _tokenController,
+                            controller: _codeController,
                             validator: (value) => (value ?? '').trim().isEmpty
                                 ? localizations.tr('required')
                                 : null,
                             decoration: InputDecoration(
-                              labelText: localizations.tr('resetTokenLabel'),
-                              hintText: localizations.tr('resetTokenHint'),
+                              labelText: localizations.tr('otpLabel'),
+                              hintText: localizations.tr('otpHint'),
                               prefixIcon: const Icon(Icons.vpn_key_outlined),
                             ),
                           ),

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:kora/app_localizations.dart';
 import 'package:kora/screens/login.dart';
-import 'package:kora/screens/signup.dart';
+import 'package:kora/screens/phone_verification_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/session_preferences.dart';
 
@@ -175,7 +175,7 @@ class _LanguageSelectionScreenState
                 const SizedBox(height: 8),
                 ElevatedButton(
                   onPressed: () => _saveLanguageAndOpen(
-                    const SignupScreen(showBackToLogin: false),
+                    const PhoneVerificationScreen(showBackToLogin: false),
                   ),
                   child: const Text('Continue to sign up'),
                 ),

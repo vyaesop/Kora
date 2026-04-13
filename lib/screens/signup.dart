@@ -11,6 +11,7 @@ class SignupScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final String? language;
   final bool showBackToLogin;
+  final String? verifiedPhone;
 
   const SignupScreen({
     super.key,
@@ -18,6 +19,7 @@ class SignupScreen extends StatefulWidget {
     this.onBack,
     this.language,
     this.showBackToLogin = true,
+    this.verifiedPhone,
   });
 
   @override
@@ -27,7 +29,6 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final _authService = BackendAuthService();
   final _formKey = GlobalKey<FormState>();
-  final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
   final nameController = TextEditingController();
@@ -40,14 +41,6 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _obscurePassword = true;
   bool _isSubmitting = false;
   final truckTypes = ['Trailor', 'High bed', 'Sino Truck', '10 Tires', 'Isuzu FSR','Isuzu NPR', 'Pick up']; // Truck types for dropdown
-
-  String? _validateEmail(String? value, AppLocalizations appLocalizations) {
-    final trimmed = value?.trim() ?? '';
-    if (trimmed.isEmpty) return appLocalizations.tr('required');
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-    if (!emailRegex.hasMatch(trimmed)) return appLocalizations.tr('invalidEmail');
-    return null;
-  }
 
   String? _validatePassword(String? value, AppLocalizations appLocalizations) {
     final trimmed = value?.trim() ?? '';
@@ -84,12 +77,15 @@ class _SignupScreenState extends State<SignupScreen> {
     }
     setState(() => _isSubmitting = true);
     try {
+      final phoneNumber =
+          (widget.verifiedPhone ?? '').trim().isNotEmpty
+              ? widget.verifiedPhone!.trim()
+              : usernameController.text.trim();
       await _authService.register(
-        email: emailController.text.trim(),
+        phoneNumber: phoneNumber,
         password: passwordController.text.trim(),
         name: nameController.text.trim(),
         userType: userType,
-        phoneNumber: usernameController.text.trim(),
         username: null,
         truckType: userType == 'Driver' ? truckType : null,
         address: userType == 'Cargo' ? addressController.text.trim() : null,
@@ -128,12 +124,14 @@ class _SignupScreenState extends State<SignupScreen> {
     if (widget.initialUserType != null) {
       userType = widget.initialUserType!;
     }
+    if ((widget.verifiedPhone ?? '').trim().isNotEmpty) {
+      usernameController.text = widget.verifiedPhone!.trim();
+    }
     // Optionally use widget.language
   }
 
   @override
   void dispose() {
-    emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
     nameController.dispose();
@@ -197,19 +195,6 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                           const SizedBox(height: 16),
                           TextFormField(
-                            controller: emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            validator: (value) =>
-                                _validateEmail(value, appLocalizations),
-                            decoration: InputDecoration(
-                              labelText: appLocalizations.tr('emailLabel'),
-                              hintText: appLocalizations.tr('email'),
-                              prefixIcon: const Icon(Icons.alternate_email),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
                             controller: passwordController,
                             obscureText: _obscurePassword,
                             autofillHints: const [AutofillHints.newPassword],
@@ -271,10 +256,16 @@ class _SignupScreenState extends State<SignupScreen> {
                             autofillHints: const [AutofillHints.telephoneNumber],
                             validator: (value) =>
                                 _validateRequired(value, appLocalizations),
+                            readOnly:
+                                (widget.verifiedPhone ?? '').trim().isNotEmpty,
                             decoration: InputDecoration(
                               labelText: appLocalizations.tr('phoneLabel'),
                               hintText: appLocalizations.tr('phone'),
                               prefixIcon: const Icon(Icons.phone_outlined),
+                              suffixIcon:
+                                  (widget.verifiedPhone ?? '').trim().isNotEmpty
+                                      ? const Icon(Icons.verified_rounded)
+                                      : null,
                             ),
                           ),
                           const SizedBox(height: 12),

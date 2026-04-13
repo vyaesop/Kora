@@ -80,8 +80,8 @@ class _KoraAppState extends ConsumerState<KoraApp> {
           return MaterialPageRoute(
             settings: settings,
             builder: (_) => ResetPasswordScreen(
-              initialEmail: email,
-              initialToken: token,
+              initialPhone: email,
+              initialCode: token,
             ),
           );
         }
@@ -92,8 +92,8 @@ class _KoraAppState extends ConsumerState<KoraApp> {
           return MaterialPageRoute(
             settings: const RouteSettings(name: '/reset-password'),
             builder: (_) => ResetPasswordScreen(
-              initialEmail: email,
-              initialToken: token,
+              initialPhone: email,
+              initialCode: token,
             ),
           );
         }

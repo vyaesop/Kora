@@ -54,6 +54,9 @@ const smtpPort = Number(process.env.SMTP_PORT || 587);
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 const smtpFrom = process.env.SMTP_FROM || 'no-reply@kora.app';
+const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+const otpSecret = process.env.OTP_SECRET || jwtSecret;
 const corsOrigins = (process.env.CORS_ORIGINS || '*')
   .split(',')
   .map((value) => value.trim())
@@ -114,6 +117,38 @@ const getMailer = () => {
       pass: smtpPass,
     },
   });
+};
+
+const normalizePhoneNumber = (raw: string) => {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  const leadingPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/[^0-9]/g, '');
+  return leadingPlus ? `+${digits}` : digits;
+};
+
+const generateOtp = () => String(crypto.randomInt(1000, 9999));
+
+const hashOtp = (phoneNumber: string, code: string) =>
+  crypto.createHash('sha256').update(`${phoneNumber}:${code}:${otpSecret}`).digest('hex');
+
+const sendTelegramMessage = async (chatId: string, text: string, replyMarkup?: unknown) => {
+  if (!telegramBotToken) {
+    throw new Error('Telegram bot token is not configured');
+  }
+  const res = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: replyMarkup,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Telegram send failed: ${res.status} ${body}`);
+  }
 };
 
 const sanitizeUser = (user: {
@@ -278,27 +313,35 @@ app.get('/health', (_req, res) => {
 
 app.post('/api/auth/register', async (req: Request, res: Response) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const rawPhone = String(req.body?.phoneNumber || '');
+    const phoneNumber = normalizePhoneNumber(rawPhone);
     const password = String(req.body?.password || '');
     const name = String(req.body?.name || '').trim();
     const userType = String(req.body?.userType || 'Cargo').trim();
     const username = String(req.body?.username || '').trim();
-    const phoneNumber = String(req.body?.phoneNumber || '').trim();
     const truckType = String(req.body?.truckType || '').trim();
     const address = String(req.body?.address || '').trim();
 
-    if (!email || !password || !name) {
-      res.status(400).json({ ok: false, error: 'email, password, and name are required' });
+    if (!phoneNumber || !password || !name) {
+      res.status(400).json({ ok: false, error: 'phoneNumber, password, and name are required' });
       return;
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: phoneNumber.toLowerCase() },
+          { phoneNumber },
+        ],
+      },
+    });
     if (existing) {
-      res.status(409).json({ ok: false, error: 'Email already exists' });
+      res.status(409).json({ ok: false, error: 'Phone number already exists' });
       return;
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const email = phoneNumber.toLowerCase();
     const user = await prisma.user.create({
       data: {
         email,
@@ -306,7 +349,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         name,
         userType,
         username: username.length === 0 ? null : username,
-        phoneNumber: phoneNumber.length === 0 ? null : phoneNumber,
+        phoneNumber,
         truckType: truckType.length === 0 ? null : truckType,
         address: address.length === 0 ? null : address,
         verificationStatus: 'not_submitted',
@@ -331,10 +374,23 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const rawPhone = String(req.body?.phoneNumber || '');
+    const phoneNumber = normalizePhoneNumber(rawPhone);
     const password = String(req.body?.password || '');
 
-    const found = await prisma.user.findUnique({ where: { email } });
+    if (!phoneNumber || !password) {
+      res.status(400).json({ ok: false, error: 'phoneNumber and password are required' });
+      return;
+    }
+
+    const found = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber },
+          { email: phoneNumber.toLowerCase() },
+        ],
+      },
+    });
     if (!found) {
       res.status(401).json({ ok: false, error: 'Invalid credentials' });
       return;
@@ -372,57 +428,54 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
 app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!email) {
-      res.status(400).json({ ok: false, error: 'email is required' });
+    const rawPhone = String(req.body?.phoneNumber || '');
+    const phoneNumber = normalizePhoneNumber(rawPhone);
+    if (!phoneNumber) {
+      res.status(400).json({ ok: false, error: 'phoneNumber is required' });
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true, name: true, email: true },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber },
+          { email: phoneNumber.toLowerCase() },
+        ],
+      },
+      select: { id: true },
     });
 
-    // Intentionally return ok even if the email does not exist.
     if (!user) {
-      res.json({ ok: true });
+      res.status(404).json({ ok: false, error: 'Phone number not found' });
       return;
     }
 
-    const mailer = getMailer();
-    if (!mailer) {
-      res.status(500).json({ ok: false, error: 'Email service not configured' });
+    const contact = await prisma.telegramContact.findUnique({
+      where: { phoneNumber },
+      select: { chatId: true },
+    });
+    if (!contact) {
+      res.status(404).json({
+        ok: false,
+        error: 'Phone number not linked. Ask the user to share it with the bot.',
+      });
       return;
     }
 
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
-
-    await prisma.passwordResetToken.create({
+    const code = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await prisma.phoneOtp.create({
       data: {
-        userId: user.id,
-        tokenHash,
+        phoneNumber,
+        codeHash: hashOtp(phoneNumber, code),
         expiresAt,
       },
     });
 
-    const resetUrl = `${appBaseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(
-      user.email,
-    )}`;
-    const deepLinkUrl = `${appDeepLinkScheme}://reset-password?token=${rawToken}&email=${encodeURIComponent(
-      user.email,
-    )}`;
-
-    await mailer.sendMail({
-      to: user.email,
-      from: smtpFrom,
-      subject: 'Reset your Kora password',
-      text:
-        `Hi ${user.name},\n\nUse this link to reset your password:\n${resetUrl}\n\n` +
-        `If you have the mobile app installed, you can also open:\n${deepLinkUrl}\n\n` +
-        `This link expires in 1 hour.`,
-    });
+    await sendTelegramMessage(
+      contact.chatId,
+      `Your password reset code is ${code}. It expires in 10 minutes.`,
+    );
 
     res.json({ ok: true });
   } catch (error) {
@@ -433,29 +486,37 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 
 app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
   try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    const token = String(req.body?.token || '').trim();
+    const rawPhone = String(req.body?.phoneNumber || '');
+    const phoneNumber = normalizePhoneNumber(rawPhone);
+    const code = String(req.body?.code || '').trim();
     const newPassword = String(req.body?.password || '');
 
-    if (!email || !token || !newPassword) {
-      res.status(400).json({ ok: false, error: 'email, token, and password are required' });
+    if (!phoneNumber || !code || !newPassword) {
+      res.status(400).json({
+        ok: false,
+        error: 'phoneNumber, code, and password are required',
+      });
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber },
+          { email: phoneNumber.toLowerCase() },
+        ],
+      },
       select: { id: true },
     });
     if (!user) {
-      res.status(400).json({ ok: false, error: 'Invalid reset token' });
+      res.status(400).json({ ok: false, error: 'Invalid reset code' });
       return;
     }
 
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const reset = await prisma.passwordResetToken.findFirst({
+    const reset = await prisma.phoneOtp.findFirst({
       where: {
-        userId: user.id,
-        tokenHash,
+        phoneNumber,
+        codeHash: hashOtp(phoneNumber, code),
         usedAt: null,
         expiresAt: { gt: new Date() },
       },
@@ -464,7 +525,7 @@ app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
     });
 
     if (!reset) {
-      res.status(400).json({ ok: false, error: 'Invalid or expired reset token' });
+      res.status(400).json({ ok: false, error: 'Invalid or expired reset code' });
       return;
     }
 
@@ -475,7 +536,7 @@ app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
         where: { id: user.id },
         data: { passwordHash },
       }),
-      prisma.passwordResetToken.update({
+      prisma.phoneOtp.update({
         where: { id: reset.id },
         data: { usedAt: new Date() },
       }),
@@ -2571,6 +2632,161 @@ app.patch('/api/admin/admins/:targetUid/claim', requireAuth, requireSuperAdmin, 
     res.json({ ok: true, user: updated });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update admin claim';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/telegram/webhook', async (req: Request, res: Response) => {
+  try {
+    const provided =
+      req.headers['x-telegram-bot-api-secret-token'] ??
+      req.headers['x-telegram-bot-api-secret-token'.toLowerCase()];
+    if (telegramWebhookSecret) {
+      const token = Array.isArray(provided) ? provided[0] : provided;
+      if (!token || token !== telegramWebhookSecret) {
+        res.status(403).json({ ok: false, error: 'Forbidden' });
+        return;
+      }
+    }
+
+    const update = req.body ?? {};
+    const message = update.message ?? update.edited_message ?? null;
+    if (!message) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const chatId = message?.chat?.id?.toString();
+    if (!chatId) {
+      res.json({ ok: true });
+      return;
+    }
+
+    if (message.contact?.phone_number) {
+      const phoneNumber = normalizePhoneNumber(String(message.contact.phone_number));
+      if (phoneNumber) {
+        await prisma.telegramContact.upsert({
+          where: { phoneNumber },
+          update: {
+            chatId,
+            telegramUserId: message.contact.user_id?.toString(),
+            firstName: message.contact.first_name?.toString(),
+            lastName: message.contact.last_name?.toString(),
+          },
+          create: {
+            phoneNumber,
+            chatId,
+            telegramUserId: message.contact.user_id?.toString(),
+            firstName: message.contact.first_name?.toString(),
+            lastName: message.contact.last_name?.toString(),
+          },
+        });
+        await sendTelegramMessage(
+          chatId,
+          'Phone number saved. You can now request a verification code in the app.',
+        );
+      }
+      res.json({ ok: true });
+      return;
+    }
+
+    const text = String(message.text || '').trim();
+    if (text === '/start' || text.toLowerCase() === 'start') {
+      await sendTelegramMessage(chatId, 'Please share your phone number to link this chat.', {
+        keyboard: [[{ text: 'Share phone number', request_contact: true }]],
+        one_time_keyboard: true,
+        resize_keyboard: true,
+      });
+      res.json({ ok: true });
+      return;
+    }
+
+    await sendTelegramMessage(
+      chatId,
+      'Use the app to request a verification code. If you have not shared your phone number yet, type /start.',
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Telegram webhook error';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/otp/telegram/request', async (req: Request, res: Response) => {
+  try {
+    const rawPhone = String(req.body?.phoneNumber || '').trim();
+    const phoneNumber = normalizePhoneNumber(rawPhone);
+    if (!phoneNumber) {
+      res.status(400).json({ ok: false, error: 'phoneNumber is required' });
+      return;
+    }
+
+    const contact = await prisma.telegramContact.findUnique({
+      where: { phoneNumber },
+    });
+    if (!contact) {
+      res.status(404).json({
+        ok: false,
+        error: 'Phone number not linked. Ask the driver to share it with the bot.',
+      });
+      return;
+    }
+
+    const code = generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await prisma.phoneOtp.create({
+      data: {
+        phoneNumber,
+        codeHash: hashOtp(phoneNumber, code),
+        expiresAt,
+      },
+    });
+
+    await sendTelegramMessage(
+      contact.chatId,
+      `Your verification code is ${code}. It expires in 10 minutes.`,
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to send OTP';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/otp/telegram/verify', async (req: Request, res: Response) => {
+  try {
+    const rawPhone = String(req.body?.phoneNumber || '').trim();
+    const code = String(req.body?.code || '').trim();
+    const phoneNumber = normalizePhoneNumber(rawPhone);
+    if (!phoneNumber || !code) {
+      res.status(400).json({ ok: false, error: 'phoneNumber and code are required' });
+      return;
+    }
+
+    const now = new Date();
+    const latest = await prisma.phoneOtp.findFirst({
+      where: {
+        phoneNumber,
+        usedAt: null,
+        expiresAt: { gt: now },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!latest || latest.codeHash !== hashOtp(phoneNumber, code)) {
+      res.status(400).json({ ok: false, error: 'Invalid or expired code' });
+      return;
+    }
+
+    await prisma.phoneOtp.update({
+      where: { id: latest.id },
+      data: { usedAt: new Date() },
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to verify OTP';
     res.status(500).json({ ok: false, error: message });
   }
 });

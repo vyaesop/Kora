@@ -136,10 +136,10 @@ class _PostScreenState extends State<PostScreen> {
           'packaging': _packagingController.text.trim(),
           'weightUnit': _weightUnit,
           'deliveryStatus': 'pending_bids',
-          'startLat': 0,
-          'startLng': 0,
-          'endLat': 0,
-          'endLng': 0,
+          'startLat': _startLocation?.latitude,
+          'startLng': _startLocation?.longitude,
+          'endLat': _endLocation?.latitude,
+          'endLng': _endLocation?.longitude,
         },
       );
 
