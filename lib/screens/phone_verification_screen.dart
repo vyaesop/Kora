@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:kora/app_localizations.dart';
 import 'package:kora/screens/login.dart';
 import 'package:kora/screens/signup.dart';
 import 'package:kora/utils/app_theme.dart';
+import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/backend_http.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
@@ -28,8 +30,10 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   bool _sending = false;
   bool _verifying = false;
   bool _codeSent = false;
+  bool _awaitingTelegramStart = false;
   DateTime? _resendAvailableAt;
   Timer? _resendTimer;
+  String? _telegramSetupUrl;
 
   @override
   void dispose() {
@@ -45,11 +49,25 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     return null;
   }
 
+  void _continueWithoutOtp() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SignupScreen(
+          showBackToLogin: false,
+          verifiedPhone: _phoneController.text.trim(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _sendOtp() async {
     if (!_formKey.currentState!.validate()) return;
+    final localizations = AppLocalizations.of(context);
     setState(() => _sending = true);
     try {
-      await BackendHttp.request(
+      final data = await BackendHttp.request(
         path: '/api/otp/telegram/request',
         method: 'POST',
         auth: false,
@@ -57,19 +75,46 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           'phoneNumber': _phoneController.text.trim(),
         },
       );
+      final normalizedPhone =
+          (data['phoneNumber'] ?? _phoneController.text.trim()).toString().trim();
+      final setupUrl = (data['setupUrl'] ?? '').toString().trim();
+      final requiresTelegramLink = data['requiresTelegramLink'] == true;
+
       if (!mounted) return;
       setState(() {
+        _phoneController.text = normalizedPhone;
         _codeSent = true;
+        _awaitingTelegramStart = requiresTelegramLink;
+        _telegramSetupUrl = setupUrl.isEmpty ? null : setupUrl;
         _resendAvailableAt = DateTime.now().add(const Duration(seconds: 30));
       });
       _startResendTimer();
+
+      if (requiresTelegramLink && _telegramSetupUrl != null) {
+        final opened = await launchUrl(
+          Uri.parse(_telegramSetupUrl!),
+          mode: LaunchMode.externalApplication,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              opened
+                  ? localizations.tr('telegramLinkSent')
+                  : localizations.tr('telegramOpenFailed'),
+            ),
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).tr('otpSent'))),
+        SnackBar(content: Text(localizations.tr('otpSent'))),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(ErrorHandler.getMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -81,7 +126,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     if (code.isEmpty) return;
     setState(() => _verifying = true);
     try {
-      await BackendHttp.request(
+      final data = await BackendHttp.request(
         path: '/api/otp/telegram/verify',
         method: 'POST',
         auth: false,
@@ -90,13 +135,18 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
           'code': code,
         },
       );
+      final verifiedPhone =
+          (data['phoneNumber'] ?? _phoneController.text.trim()).toString().trim();
+      final verificationToken =
+          (data['verificationToken'] ?? '').toString().trim();
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => SignupScreen(
             showBackToLogin: false,
-            verifiedPhone: _phoneController.text.trim(),
+            verifiedPhone: verifiedPhone,
+            verifiedPhoneToken: verificationToken,
           ),
         ),
       );
@@ -245,6 +295,47 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                                 ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: OutlinedButton(
+                          onPressed: _continueWithoutOtp,
+                          child: Text(localizations.tr('continue')),
+                        ),
+                      ),
+                      if (_awaitingTelegramStart && _telegramSetupUrl != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          localizations.tr('telegramLinkPending'),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: isDark
+                                    ? AppPalette.darkTextSoft
+                                    : Colors.black54,
+                              ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final uri = Uri.parse(_telegramSetupUrl!);
+                            final opened = await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                            if (!mounted) return;
+                            if (!opened) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text(localizations.tr('telegramOpenFailed')),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.open_in_new),
+                          label: Text(localizations.tr('openTelegram')),
+                        ),
+                      ],
                     ],
                   ),
                 ),

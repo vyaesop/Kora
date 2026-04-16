@@ -12,6 +12,7 @@ class SignupScreen extends StatefulWidget {
   final String? language;
   final bool showBackToLogin;
   final String? verifiedPhone;
+  final String? verifiedPhoneToken;
 
   const SignupScreen({
     super.key,
@@ -20,6 +21,7 @@ class SignupScreen extends StatefulWidget {
     this.language,
     this.showBackToLogin = true,
     this.verifiedPhone,
+    this.verifiedPhoneToken,
   });
 
   @override

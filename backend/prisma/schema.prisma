@@ -8,58 +8,50 @@ datasource db {
 }
 
 model User {
-  id                      String    @id @default(uuid())
-  email                   String    @unique
+  id                      String               @id @default(uuid())
+  email                   String               @unique
   passwordHash            String
   name                    String
-  phoneNumber             String?   @unique
-  username                String?   @unique
+  username                String?              @unique
   profileImageUrl         String?
   bio                     String?
   link                    String?
-  address                 String?
-  
   userType                String
-  
-  verificationStatus      String    @default("not_submitted")
+  verificationStatus      String               @default("not_submitted")
   verificationNote        String?
-  verificationSubmittedAt DateTime?
-  verificationReviewedAt  DateTime?
-
   truckType               String?
   licensePlate            String?
   insurance               String?
   licenseNumberPhoto      String?
   driverTradeLicensePhoto String?
   licenseNumber           String?
-  
   tradeLicense            String?
   tradeLicensePhoto       String?
   tinNumber               String?
   idPhoto                 String?
-  
-  isRepresentative        Boolean   @default(false)
+  isRepresentative        Boolean              @default(false)
   representativePhoto     String?
-
-  isAdmin                 Boolean   @default(false)
-  isSuperAdmin            Boolean   @default(false)
-  ratingTotal             Float     @default(0)
-  ratingCount             Int       @default(0)
-  ratingAverage           Float     @default(0)
-  
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-
-  threads                 Thread[]  @relation("ThreadOwner")
-  bids                    Bid[]     @relation("BidDriver")
-  comments                Comment[]
+  isAdmin                 Boolean              @default(false)
+  isSuperAdmin            Boolean              @default(false)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  phoneNumber             String?
+  ratingAverage           Float                @default(0)
+  ratingCount             Int                  @default(0)
+  ratingTotal             Float                @default(0)
+  address                 String?
+  verificationReviewedAt  DateTime?
+  verificationSubmittedAt DateTime?
+  bids                    Bid[]                @relation("BidDriver")
   sentChatMessages        ChatMessage[]
-  ratingsReceived         DriverRating[] @relation("DriverRatings")
+  comments                Comment[]
+  disputesReported        Dispute[]            @relation("DisputeReporter")
   driverLocation          DriverLocation?
-  followerList            Follows[] @relation("Following")
-  followingList           Follows[] @relation("Follower")
-  disputesReported        Dispute[] @relation("DisputeReporter")
+  ratingsReceived         DriverRating[]       @relation("DriverRatings")
+  followerList            Follows[]            @relation("Following")
+  followingList           Follows[]            @relation("Follower")
   passwordResetTokens     PasswordResetToken[]
+  threads                 Thread[]             @relation("ThreadOwner")
 }
 
 model Follows {
@@ -72,56 +64,48 @@ model Follows {
 }
 
 model Thread {
-  id                    String    @id @default(uuid())
-  ownerId               String
-  owner                 User      @relation("ThreadOwner", fields: [ownerId], references: [id])
-  
-  message               String
-  weight                Float?
-  type                  String?
-  start                 String?
-  end                   String?
-  packaging             String?
-  weightUnit            String?   @default("kg")
-  
-  startLat              Float?
-  startLng              Float?
-  endLat                Float?
-  endLng                Float?
-
-  deliveryStatus        String?   @default("pending")
-
-  startRegion           String?
-  startZone             String?
-  startCity             String?
-  endRegion             String?
-  endZone               String?
-  endCity               String?
-
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  bids                  Bid[] 
-  comments              Comment[]
-  disputes              Dispute[]
-  chatMessages          ChatMessage[]
+  id             String        @id @default(uuid())
+  ownerId        String
+  message        String
+  weight         Float?
+  type           String?
+  start          String?
+  end            String?
+  packaging      String?
+  weightUnit     String?       @default("kg")
+  startLat       Float?
+  startLng       Float?
+  endLat         Float?
+  endLng         Float?
+  deliveryStatus String?       @default("pending")
+  startRegion    String?
+  startZone      String?
+  startCity      String?
+  endRegion      String?
+  endZone        String?
+  endCity        String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  bids           Bid[]
+  chatMessages   ChatMessage[]
+  comments       Comment[]
+  disputes       Dispute[]
+  owner          User          @relation("ThreadOwner", fields: [ownerId], references: [id])
 }
 
 model Bid {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   loadId      String
   driverId    String
   amount      Float
-  status      String   @default("pending")
+  status      String    @default("pending")
   note        String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   acceptedAt  DateTime?
   completedAt DateTime?
-
-  load        Thread   @relation(fields: [loadId], references: [id])
-  driver      User     @relation("BidDriver", fields: [driverId], references: [id])
+  driver      User      @relation("BidDriver", fields: [driverId], references: [id])
+  load        Thread    @relation(fields: [loadId], references: [id])
 }
 
 model Comment {
@@ -130,24 +114,22 @@ model Comment {
   userId    String
   text      String
   createdAt DateTime @default(now())
-
   thread    Thread   @relation(fields: [threadId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
 }
 
 model Dispute {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   threadId       String
   reporterId     String
   category       String
   details        String?
-  status         String    @default("open")
+  status         String   @default("open")
   resolutionNote String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  thread         Thread    @relation(fields: [threadId], references: [id])
-  reporter       User      @relation("DisputeReporter", fields: [reporterId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  reporter       User     @relation("DisputeReporter", fields: [reporterId], references: [id])
+  thread         Thread   @relation(fields: [threadId], references: [id])
 }
 
 model ChatMessage {
@@ -157,25 +139,23 @@ model ChatMessage {
   receiverId String?
   text       String
   createdAt  DateTime @default(now())
-
-  thread     Thread   @relation(fields: [threadId], references: [id])
   sender     User     @relation(fields: [senderId], references: [id])
+  thread     Thread   @relation(fields: [threadId], references: [id])
 
   @@index([threadId, createdAt])
   @@index([senderId, createdAt])
 }
 
 model DriverRating {
-  id         String   @id @default(uuid())
-  driverId   String
-  ownerId    String
-  bidId      String   @unique
-  rating     Float
-  comment    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  driver     User     @relation("DriverRatings", fields: [driverId], references: [id])
+  id        String   @id @default(uuid())
+  driverId  String
+  ownerId   String
+  bidId     String   @unique
+  rating    Float
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  driver    User     @relation("DriverRatings", fields: [driverId], references: [id])
 
   @@index([driverId, createdAt])
 }
@@ -186,21 +166,19 @@ model DriverLocation {
   latitude  Float
   longitude Float
   updatedAt DateTime @updatedAt
-
   driver    User     @relation(fields: [driverId], references: [id])
 
   @@index([updatedAt])
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
   tokenHash String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId, expiresAt])
   @@index([tokenHash])
@@ -220,12 +198,12 @@ model TelegramContact {
 }
 
 model PhoneOtp {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   phoneNumber String
   codeHash    String
   expiresAt   DateTime
   usedAt      DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([phoneNumber, expiresAt])
 }

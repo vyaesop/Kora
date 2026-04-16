@@ -1,5 +1,5 @@
 {
-  "java.configuration.updateBuildConfiguration": "interactive",
+  "java.configuration.updateBuildConfiguration": "automatic",
   "java.compile.nullAnalysis.mode": "automatic",
   "dart.flutterSdkPath": "C:\\tools\\flutter",
   "git.ignoreLimitWarning": true,

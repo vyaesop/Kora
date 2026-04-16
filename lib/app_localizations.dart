@@ -71,9 +71,16 @@ class AppLocalizations {
       'phoneVerifyTitle': 'Verify your phone',
       'phoneVerifySubtitle':
           'We will send a one-time code via Telegram to confirm your number before sign up.',
-      'phoneVerifyStepTitle': 'Step 1: Share your number in Telegram',
+      'phoneVerifyStepTitle': 'Step 1: Confirm in Telegram',
       'phoneVerifyStepBody':
-          'Open our verification bot in Telegram, tap /start, and share your phone number. Then request a code below.',
+          'Enter your phone number below. If this is your first time, we will open Telegram so you can tap Start once, and the bot will send your code there automatically.',
+      'telegramLinkPending':
+          'Finish the Telegram step, then come back and enter the code from the bot.',
+      'telegramLinkSent':
+          'Telegram opened. Tap Start in the bot chat and your code will be sent there.',
+      'telegramOpenFailed':
+          'Could not open Telegram automatically. Use the button below.',
+      'openTelegram': 'Open Telegram',
       'sendOtp': 'Send code',
       'resendOtp': 'Resend code',
       'otpSent': 'Verification code sent.',

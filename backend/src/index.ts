@@ -55,6 +55,7 @@ const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
 const smtpFrom = process.env.SMTP_FROM || 'no-reply@kora.app';
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, '').trim();
 const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
 const otpSecret = process.env.OTP_SECRET || jwtSecret;
 const corsOrigins = (process.env.CORS_ORIGINS || '*')
@@ -132,6 +133,48 @@ const generateOtp = () => String(crypto.randomInt(1000, 9999));
 const hashOtp = (phoneNumber: string, code: string) =>
   crypto.createHash('sha256').update(`${phoneNumber}:${code}:${otpSecret}`).digest('hex');
 
+type TelegramSignupLinkPayload = JwtPayload & {
+  purpose: 'telegram_signup_link';
+  phoneNumber: string;
+};
+
+type SignupPhoneVerificationPayload = JwtPayload & {
+  purpose: 'signup_phone_verified';
+  phoneNumber: string;
+};
+
+const signTelegramSignupLinkToken = (phoneNumber: string) =>
+  jwt.sign({ purpose: 'telegram_signup_link', phoneNumber }, otpSecret, { expiresIn: '10m' });
+
+const readTelegramSignupLinkToken = (token: string) => {
+  try {
+    const payload = jwt.verify(token, otpSecret) as TelegramSignupLinkPayload;
+    if (payload.purpose !== 'telegram_signup_link') {
+      return null;
+    }
+    const phoneNumber = normalizePhoneNumber(String(payload.phoneNumber || ''));
+    return phoneNumber ? { phoneNumber } : null;
+  } catch {
+    return null;
+  }
+};
+
+const signSignupPhoneVerificationToken = (phoneNumber: string) =>
+  jwt.sign({ purpose: 'signup_phone_verified', phoneNumber }, otpSecret, { expiresIn: '20m' });
+
+const readSignupPhoneVerificationToken = (token: string) => {
+  try {
+    const payload = jwt.verify(token, otpSecret) as SignupPhoneVerificationPayload;
+    if (payload.purpose !== 'signup_phone_verified') {
+      return null;
+    }
+    const phoneNumber = normalizePhoneNumber(String(payload.phoneNumber || ''));
+    return phoneNumber ? { phoneNumber } : null;
+  } catch {
+    return null;
+  }
+};
+
 const sendTelegramMessage = async (chatId: string, text: string, replyMarkup?: unknown) => {
   if (!telegramBotToken) {
     throw new Error('Telegram bot token is not configured');
@@ -149,6 +192,62 @@ const sendTelegramMessage = async (chatId: string, text: string, replyMarkup?: u
     const body = await res.text();
     throw new Error(`Telegram send failed: ${res.status} ${body}`);
   }
+};
+
+const upsertTelegramContact = async ({
+  phoneNumber,
+  chatId,
+  telegramUserId,
+  firstName,
+  lastName,
+}: {
+  phoneNumber: string;
+  chatId: string;
+  telegramUserId?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}) =>
+  prisma.telegramContact.upsert({
+    where: { phoneNumber },
+    update: {
+      chatId,
+      telegramUserId: telegramUserId ?? undefined,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+    },
+    create: {
+      phoneNumber,
+      chatId,
+      telegramUserId: telegramUserId ?? undefined,
+      firstName: firstName ?? undefined,
+      lastName: lastName ?? undefined,
+    },
+  });
+
+const issueTelegramOtp = async ({
+  phoneNumber,
+  chatId,
+  intro,
+}: {
+  phoneNumber: string;
+  chatId: string;
+  intro?: string;
+}) => {
+  const code = generateOtp();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await prisma.phoneOtp.create({
+    data: {
+      phoneNumber,
+      codeHash: hashOtp(phoneNumber, code),
+      expiresAt,
+    },
+  });
+
+  const message = intro?.trim()
+    ? `${intro.trim()}\n\nYour verification code is ${code}. It expires in 10 minutes.`
+    : `Your verification code is ${code}. It expires in 10 minutes.`;
+
+  await sendTelegramMessage(chatId, message);
 };
 
 const sanitizeUser = (user: {
@@ -374,20 +473,21 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
-    const rawPhone = String(req.body?.phoneNumber || '');
-    const phoneNumber = normalizePhoneNumber(rawPhone);
+    const rawIdentifier = String(req.body?.phoneNumber || req.body?.email || '').trim();
+    const phoneNumber = normalizePhoneNumber(rawIdentifier);
+    const email = rawIdentifier.toLowerCase();
     const password = String(req.body?.password || '');
 
-    if (!phoneNumber || !password) {
-      res.status(400).json({ ok: false, error: 'phoneNumber and password are required' });
+    if (!rawIdentifier || !password) {
+      res.status(400).json({ ok: false, error: 'phoneNumber/email and password are required' });
       return;
     }
 
     const found = await prisma.user.findFirst({
       where: {
         OR: [
-          { phoneNumber },
-          { email: phoneNumber.toLowerCase() },
+          ...(phoneNumber.isEmpty ? [] : [{ phoneNumber }]),
+          { email },
         ],
       },
     });
@@ -2665,21 +2765,12 @@ app.post('/api/telegram/webhook', async (req: Request, res: Response) => {
     if (message.contact?.phone_number) {
       const phoneNumber = normalizePhoneNumber(String(message.contact.phone_number));
       if (phoneNumber) {
-        await prisma.telegramContact.upsert({
-          where: { phoneNumber },
-          update: {
-            chatId,
-            telegramUserId: message.contact.user_id?.toString(),
-            firstName: message.contact.first_name?.toString(),
-            lastName: message.contact.last_name?.toString(),
-          },
-          create: {
-            phoneNumber,
-            chatId,
-            telegramUserId: message.contact.user_id?.toString(),
-            firstName: message.contact.first_name?.toString(),
-            lastName: message.contact.last_name?.toString(),
-          },
+        await upsertTelegramContact({
+          phoneNumber,
+          chatId,
+          telegramUserId: message.contact.user_id?.toString(),
+          firstName: message.contact.first_name?.toString(),
+          lastName: message.contact.last_name?.toString(),
         });
         await sendTelegramMessage(
           chatId,
@@ -2691,7 +2782,26 @@ app.post('/api/telegram/webhook', async (req: Request, res: Response) => {
     }
 
     const text = String(message.text || '').trim();
-    if (text === '/start' || text.toLowerCase() === 'start') {
+    const [command = '', payload = ''] = text.split(/\s+/, 2);
+    if (command === '/start' || text.toLowerCase() === 'start') {
+      const signupLink = payload ? readTelegramSignupLinkToken(payload) : null;
+      if (signupLink) {
+        await upsertTelegramContact({
+          phoneNumber: signupLink.phoneNumber,
+          chatId,
+          telegramUserId: message.from?.id?.toString(),
+          firstName: message.from?.first_name?.toString(),
+          lastName: message.from?.last_name?.toString(),
+        });
+        await issueTelegramOtp({
+          phoneNumber: signupLink.phoneNumber,
+          chatId,
+          intro: `This Telegram chat is now linked to ${signupLink.phoneNumber}.`,
+        });
+        res.json({ ok: true });
+        return;
+      }
+
       await sendTelegramMessage(chatId, 'Please share your phone number to link this chat.', {
         keyboard: [[{ text: 'Share phone number', request_contact: true }]],
         one_time_keyboard: true,
@@ -2725,29 +2835,27 @@ app.post('/api/otp/telegram/request', async (req: Request, res: Response) => {
       where: { phoneNumber },
     });
     if (!contact) {
-      res.status(404).json({
-        ok: false,
-        error: 'Phone number not linked. Ask the driver to share it with the bot.',
+      if (!telegramBotUsername) {
+        res.status(409).json({
+          ok: false,
+          error: 'Telegram bot username is not configured',
+        });
+        return;
+      }
+
+      const setupToken = signTelegramSignupLinkToken(phoneNumber);
+      res.status(202).json({
+        ok: true,
+        phoneNumber,
+        requiresTelegramLink: true,
+        setupUrl: `https://t.me/${telegramBotUsername}?start=${encodeURIComponent(setupToken)}`,
       });
       return;
     }
 
-    const code = generateOtp();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await prisma.phoneOtp.create({
-      data: {
-        phoneNumber,
-        codeHash: hashOtp(phoneNumber, code),
-        expiresAt,
-      },
-    });
+    await issueTelegramOtp({ phoneNumber, chatId: contact.chatId });
 
-    await sendTelegramMessage(
-      contact.chatId,
-      `Your verification code is ${code}. It expires in 10 minutes.`,
-    );
-
-    res.json({ ok: true });
+    res.json({ ok: true, phoneNumber, requiresTelegramLink: false });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send OTP';
     res.status(500).json({ ok: false, error: message });
@@ -2784,7 +2892,11 @@ app.post('/api/otp/telegram/verify', async (req: Request, res: Response) => {
       data: { usedAt: new Date() },
     });
 
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      phoneNumber,
+      verificationToken: signSignupPhoneVerificationToken(phoneNumber),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to verify OTP';
     res.status(500).json({ ok: false, error: message });

@@ -45,6 +45,10 @@ Optional but recommended:
 
 - `APP_BASE_URL` (your public app URL that serves `/reset-password`)
 - `APP_DEEPLINK_SCHEME`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_BOT_USERNAME`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `OTP_SECRET`
 - `SMTP_HOST`
 - `SMTP_PORT`
 - `SMTP_USER`

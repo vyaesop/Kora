@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.1.0 <4.0.0'
+  sdk: '>=3.10.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -13,10 +13,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^2.4.10
-  google_fonts: ^5.1.0
-  image_picker: ^1.0.8
-  shared_preferences: ^2.2.2
-  geolocator: ^10.1.0
+  google_fonts: 6.1.0
+  image_picker: 1.0.8
+  shared_preferences: 2.2.3
+  geolocator: 10.1.1
   flutter_map: ^6.1.0
   latlong2: ^0.9.1
   sliding_up_panel: ^2.0.0+1
@@ -26,6 +26,16 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.2
+
+dependency_overrides:
+  google_fonts:
+    path: vendor/google_fonts
+  flutter_plugin_android_lifecycle: 2.0.34
+  geolocator_android: 5.0.2
+  image_picker_android: 0.8.13+16
+  path_provider_android: 2.3.1
+  shared_preferences_android: 2.4.23
+  url_launcher_android: 6.3.29
 
 flutter:
   uses-material-design: true
