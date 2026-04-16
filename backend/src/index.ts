@@ -486,7 +486,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const found = await prisma.user.findFirst({
       where: {
         OR: [
-          ...(phoneNumber.isEmpty ? [] : [{ phoneNumber }]),
+          ...(phoneNumber.length == 0 ? [] : [{ phoneNumber }]),
           { email },
         ],
       },
