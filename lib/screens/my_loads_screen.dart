@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'package:kora/model/thread_message.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/app_localizations.dart';
 import 'package:kora/utils/backend_http.dart';
+import 'comment_screen.dart';
 
 class MyLoadsScreen extends StatefulWidget {
   final String cargoUserId;
@@ -94,20 +96,72 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
             itemCount: loads.length,
             itemBuilder: (context, index) {
               final load = loads[index];
-              final title = (load['description'] ?? load['message'] ?? '').toString().trim();
-              final start = (load['start'] ?? load['origin'] ?? load['startCity'] ?? 'Unknown origin').toString();
-              final end = (load['end'] ?? load['destination'] ?? load['endCity'] ?? 'Unknown destination').toString();
+              final title = (load['description'] ?? load['message'] ?? '')
+                  .toString()
+                  .trim();
+              final start =
+                  (load['start'] ??
+                          load['origin'] ??
+                          load['startCity'] ??
+                          'Unknown departure')
+                      .toString();
+              final end =
+                  (load['end'] ??
+                          load['destination'] ??
+                          load['endCity'] ??
+                          'Unknown destination')
+                      .toString();
               final bidsCount = (load['bids_count'] as num?)?.toInt() ?? 0;
-              final status = deliveryStatusLabel((load['deliveryStatus'] ?? 'pending_bids').toString());
+              final status = deliveryStatusLabel(
+                (load['deliveryStatus'] ?? 'pending_bids').toString(),
+              );
+              final createdAt =
+                  DateTime.tryParse((load['createdAt'] ?? '').toString()) ??
+                  DateTime.now();
+              final thread = ThreadMessage(
+                id: (load['id'] ?? '').toString(),
+                docId: (load['id'] ?? '').toString(),
+                senderName: '',
+                senderProfileImageUrl: '',
+                ownerId: (load['ownerId'] ?? widget.cargoUserId).toString(),
+                message: (load['message'] ?? '').toString(),
+                timestamp: createdAt,
+                likes: const [],
+                comments: const [],
+                weight: (load['weight'] as num?)?.toDouble() ?? 0,
+                type: (load['type'] ?? '').toString(),
+                start: start,
+                end: end,
+                packaging: (load['packaging'] ?? '').toString(),
+                weightUnit: (load['weightUnit'] ?? 'kg').toString(),
+                startLat: (load['startLat'] as num?)?.toDouble() ?? 0,
+                startLng: (load['startLng'] as num?)?.toDouble() ?? 0,
+                endLat: (load['endLat'] as num?)?.toDouble() ?? 0,
+                endLng: (load['endLng'] as num?)?.toDouble() ?? 0,
+                deliveryStatus: (load['deliveryStatus'] ?? 'pending_bids')
+                    .toString(),
+              );
 
               return ListTile(
                 title: Text(
-                    title.isEmpty ? '${localizations.tr('loadIndex')} ${index + 1}' : title),
-                subtitle: Text('${localizations.tr('from')}: $start\n${localizations.tr('to')}: $end\n${localizations.tr('status')}: $status'),
+                  title.isEmpty
+                      ? '${localizations.tr('loadIndex')} ${index + 1}'
+                      : title,
+                ),
+                subtitle: Text(
+                  'Departure: $start\nDestination: $end\n${localizations.tr('status')}: $status',
+                ),
                 trailing: Text('$bidsCount ${localizations.tr('bidsCount')}'),
                 isThreeLine: true,
                 onTap: () {
-                  // Intentionally left lightweight; detailed management happens in CommentScreen.
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CommentScreen(
+                        message: thread,
+                        threadId: thread.docId,
+                      ),
+                    ),
+                  );
                 },
               );
             },
@@ -117,4 +171,3 @@ class _MyLoadsScreenState extends State<MyLoadsScreen> {
     );
   }
 }
-

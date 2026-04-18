@@ -33,7 +33,10 @@ class BackendAuthService {
       id: (payload['id'] ?? '').toString(),
       name: (payload['name'] ?? '').toString(),
       username:
-          (payload['username'] ?? payload['phoneNumber'] ?? payload['email'] ?? '')
+          (payload['username'] ??
+                  payload['phoneNumber'] ??
+                  payload['email'] ??
+                  '')
               .toString(),
       followers: const [],
       following: const [],
@@ -43,12 +46,19 @@ class BackendAuthService {
       userType: (payload['userType'] ?? 'Cargo').toString(),
       truckType: payload['truckType']?.toString(),
       address: payload['address']?.toString(),
+      licensePlate: payload['licensePlate']?.toString(),
+      libre: payload['libre']?.toString(),
+      tradeLicensePhoto: payload['tradeLicensePhoto']?.toString(),
+      tradeRegistrationCertificatePhoto:
+          payload['tradeRegistrationCertificatePhoto']?.toString(),
+      tinNumber: payload['tinNumber']?.toString(),
       licenseNumberPhoto: payload['licenseNumberPhoto']?.toString(),
       idPhoto: payload['idPhoto']?.toString(),
       acceptedLoads: const [],
       termsAccepted: true,
       privacyAccepted: true,
-      verificationStatus: (payload['verificationStatus'] ?? 'not_submitted').toString(),
+      verificationStatus: (payload['verificationStatus'] ?? 'not_submitted')
+          .toString(),
     );
   }
 
@@ -59,14 +69,12 @@ class BackendAuthService {
     final data = await _request(
       path: '/api/auth/login',
       method: 'POST',
-      body: {
-        'phoneNumber': phoneNumber,
-        'password': password,
-      },
+      body: {'phoneNumber': phoneNumber, 'password': password},
     );
 
     final token = (data['token'] ?? '').toString();
-    final userMap = (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
+    final userMap =
+        (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
     await _saveSession(token: token, user: userMap);
     return _toUserModel(userMap);
   }
@@ -95,7 +103,8 @@ class BackendAuthService {
     );
 
     final token = (data['token'] ?? '').toString();
-    final userMap = (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
+    final userMap =
+        (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
     await _saveSession(token: token, user: userMap);
     return _toUserModel(userMap);
   }
@@ -116,11 +125,7 @@ class BackendAuthService {
     await _request(
       path: '/api/auth/reset-password',
       method: 'POST',
-      body: {
-        'phoneNumber': phoneNumber,
-        'code': code,
-        'password': newPassword,
-      },
+      body: {'phoneNumber': phoneNumber, 'code': code, 'password': newPassword},
     );
   }
 
@@ -132,7 +137,8 @@ class BackendAuthService {
 
     try {
       final data = await _request(path: '/api/auth/me', token: token);
-      final userMap = (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
+      final userMap =
+          (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
       await _saveSession(token: token, user: userMap);
       return _toUserModel(userMap);
     } catch (_) {
@@ -206,4 +212,3 @@ class BackendAuthService {
     _cacheLoaded = true;
   }
 }
-

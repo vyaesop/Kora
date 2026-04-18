@@ -5,6 +5,7 @@ class ThreadMessage {
   final String docId;
   final String senderName;
   final String senderProfileImageUrl;
+  final String ownerId;
   final String message;
   final DateTime timestamp;
   final List<dynamic> likes;
@@ -26,6 +27,7 @@ class ThreadMessage {
     required this.docId,
     required this.senderName,
     required this.senderProfileImageUrl,
+    required this.ownerId,
     required this.message,
     required this.timestamp,
     required this.likes,
@@ -49,6 +51,7 @@ class ThreadMessage {
       'docId': docId,
       'senderName': senderName,
       'senderProfileImageUrl': senderProfileImageUrl,
+      'ownerId': ownerId,
       'message': message,
       'timestamp': timestamp.toIso8601String(),
       'likes': likes,
@@ -73,8 +76,11 @@ class ThreadMessage {
       docId: (map['docId'] ?? map['id'] ?? '').toString(),
       senderName: (map['senderName'] ?? map['sender'] ?? '').toString(),
       senderProfileImageUrl: (map['senderProfileImageUrl'] ?? '').toString(),
+      ownerId: (map['ownerId'] ?? '').toString(),
       message: (map['message'] ?? '').toString(),
-      timestamp: DateTime.tryParse((map['timestamp'] ?? '').toString()) ?? DateTime.now(),
+      timestamp:
+          DateTime.tryParse((map['timestamp'] ?? '').toString()) ??
+          DateTime.now(),
       likes: List<dynamic>.from(map['likes'] ?? const []),
       comments: List<dynamic>.from(map['comments'] ?? const []),
       weight: (map['weight'] as num?)?.toDouble() ?? 0,
@@ -96,4 +102,3 @@ class ThreadMessage {
   factory ThreadMessage.fromJson(String source) =>
       ThreadMessage.fromMap(json.decode(source) as Map<String, dynamic>);
 }
-

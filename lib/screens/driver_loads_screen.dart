@@ -16,9 +16,11 @@ class DriverLoadsScreen extends StatelessWidget {
     );
     return (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .where((thread) =>
-            (thread['deliveryStatus'] ?? 'pending_bids').toString() ==
-            'pending_bids')
+        .where(
+          (thread) =>
+              (thread['deliveryStatus'] ?? 'pending_bids').toString() ==
+              'pending_bids',
+        )
         .toList();
   }
 
@@ -51,7 +53,11 @@ class DriverLoadsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final load = loads[index];
               return _buildLoadCard(
-                  context, (load['id'] ?? '').toString(), load, localizations);
+                context,
+                (load['id'] ?? '').toString(),
+                load,
+                localizations,
+              );
             },
           );
         },
@@ -59,20 +65,27 @@ class DriverLoadsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLoadCard(BuildContext context, String threadId,
-      Map<String, dynamic> load, AppLocalizations localizations) {
-    final title =
-        (load['description'] ?? load['message'] ?? '').toString().trim();
-    final start = (load['start'] ??
-            load['origin'] ??
-            load['startCity'] ??
-            'Unknown origin')
-        .toString();
-    final end = (load['end'] ??
-            load['destination'] ??
-            load['endCity'] ??
-            'Unknown destination')
-        .toString();
+  Widget _buildLoadCard(
+    BuildContext context,
+    String threadId,
+    Map<String, dynamic> load,
+    AppLocalizations localizations,
+  ) {
+    final title = (load['description'] ?? load['message'] ?? '')
+        .toString()
+        .trim();
+    final start =
+        (load['start'] ??
+                load['origin'] ??
+                load['startCity'] ??
+                'Unknown departure')
+            .toString();
+    final end =
+        (load['end'] ??
+                load['destination'] ??
+                load['endCity'] ??
+                'Unknown destination')
+            .toString();
     final bidsCount = (load['bids_count'] as num?)?.toInt() ?? 0;
 
     return Card(
@@ -80,13 +93,18 @@ class DriverLoadsScreen extends StatelessWidget {
       child: ListTile(
         title: Text(title.isEmpty ? localizations.tr('availableLoad') : title),
         subtitle: Text(
-            '${localizations.tr('from')}: $start\n${localizations.tr('to')}: $end\n$bidsCount ${localizations.tr('bidsSoFar')}'),
+          'Departure: $start\nDestination: $end\n$bidsCount ${localizations.tr('bidsSoFar')}',
+        ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(localizations.tr('openStatus'),
-                style:
-                    const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            Text(
+              localizations.tr('openStatus'),
+              style: const TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             ElevatedButton(
               onPressed: () => _showBidDialog(context, threadId, localizations),
               child: Text(localizations.tr('bid')),
@@ -94,12 +112,16 @@ class DriverLoadsScreen extends StatelessWidget {
           ],
         ),
         isThreeLine: true,
+        onTap: () => _showBidDialog(context, threadId, localizations),
       ),
     );
   }
 
-  Future<void> _showBidDialog(BuildContext context, String threadId,
-      AppLocalizations localizations) async {
+  Future<void> _showBidDialog(
+    BuildContext context,
+    String threadId,
+    AppLocalizations localizations,
+  ) async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -154,9 +176,9 @@ class DriverLoadsScreen extends StatelessWidget {
     }
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(localizations.tr('bidSubmitted'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(localizations.tr('bidSubmitted'))));
     }
   }
 }
@@ -191,8 +213,7 @@ class _BidButtonState extends State<BidButton> {
           child: TextField(
             controller: _controller,
             keyboardType: TextInputType.number,
-            decoration:
-                InputDecoration(labelText: localizations.tr('yourBid')),
+            decoration: InputDecoration(labelText: localizations.tr('yourBid')),
           ),
         ),
         const SizedBox(height: 8),
@@ -202,13 +223,14 @@ class _BidButtonState extends State<BidButton> {
               : () async {
                   setState(() => _loading = true);
                   final amount = double.tryParse(
-                      _controller.text.replaceAll(',', '').trim());
+                    _controller.text.replaceAll(',', '').trim(),
+                  );
                   if (amount == null || amount <= 0) {
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                            content:
-                                Text(localizations.tr('enterValidAmount'))),
+                          content: Text(localizations.tr('enterValidAmount')),
+                        ),
                       );
                     }
                     setState(() => _loading = false);
@@ -230,4 +252,3 @@ class _BidButtonState extends State<BidButton> {
     );
   }
 }
-

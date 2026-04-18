@@ -84,8 +84,13 @@ const verificationUserSelect = {
   verificationSubmittedAt: true,
   verificationReviewedAt: true,
   userType: true,
+  tinNumber: true,
+  libre: true,
+  licensePlate: true,
   idPhoto: true,
   licenseNumberPhoto: true,
+  tradeLicensePhoto: true,
+  tradeRegistrationCertificatePhoto: true,
   isAdmin: true,
   isSuperAdmin: true,
 } satisfies Prisma.UserSelect;
@@ -262,8 +267,13 @@ const sanitizeUser = (user: {
   verificationNote?: string | null;
   verificationSubmittedAt?: Date | null;
   verificationReviewedAt?: Date | null;
+  tinNumber?: string | null;
+  libre?: string | null;
+  licensePlate?: string | null;
   idPhoto?: string | null;
   licenseNumberPhoto?: string | null;
+  tradeLicensePhoto?: string | null;
+  tradeRegistrationCertificatePhoto?: string | null;
   userType: string;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -279,8 +289,13 @@ const sanitizeUser = (user: {
   verificationNote: user.verificationNote ?? null,
   verificationSubmittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
   verificationReviewedAt: user.verificationReviewedAt?.toISOString() ?? null,
+  tinNumber: user.tinNumber ?? null,
+  libre: user.libre ?? null,
+  licensePlate: user.licensePlate ?? null,
   idPhoto: user.idPhoto ?? null,
   licenseNumberPhoto: user.licenseNumberPhoto ?? null,
+  tradeLicensePhoto: user.tradeLicensePhoto ?? null,
+  tradeRegistrationCertificatePhoto: user.tradeRegistrationCertificatePhoto ?? null,
   userType: user.userType,
   isAdmin: user.isAdmin,
   isSuperAdmin: user.isSuperAdmin,
@@ -296,13 +311,13 @@ const isVerificationApproved = (status: string | null | undefined) =>
 
 const requiredVerificationMessage = (userType: string) =>
   userType === 'Driver'
-    ? 'Upload your national ID and driver\'s license from the Profile verification section, then submit them for admin approval before bidding.'
-    : 'Upload your national ID from the Profile verification section, then submit it for admin approval before posting loads.';
+    ? 'Complete your verification in Profile > Verification with your TIN number, libre, vehicle plate number, national ID, driver\'s license, and trade licence photo before bidding.'
+    : 'Complete your verification in Profile > Verification with your TIN number, national ID, trade registration certificate photo, and trade licence photo before posting loads.';
 
 const getRequiredVerificationDocs = (userType: string) =>
   userType === 'Driver'
-    ? ['national_id', 'driver_license']
-    : ['national_id'];
+    ? ['tin_number', 'libre', 'vehicle_plate_number', 'national_id', 'driver_license', 'trade_licence_photo']
+    : ['tin_number', 'national_id', 'trade_registration_certificate_photo', 'trade_licence_photo'];
 
 const requireApprovedVerification = async ({
   userId,
@@ -763,9 +778,13 @@ app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Respo
         address: true,
         licensePlate: true,
         licenseNumber: true,
+        libre: true,
         tradeLicense: true,
+        tinNumber: true,
         idPhoto: true,
         licenseNumberPhoto: true,
+        tradeLicensePhoto: true,
+        tradeRegistrationCertificatePhoto: true,
         verificationStatus: true,
         verificationNote: true,
         verificationSubmittedAt: true,
@@ -786,6 +805,12 @@ app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Respo
         ...user,
         idPhoto: includeSensitiveVerification ? user.idPhoto : null,
         licenseNumberPhoto: includeSensitiveVerification ? user.licenseNumberPhoto : null,
+        tinNumber: includeSensitiveVerification ? user.tinNumber : null,
+        libre: includeSensitiveVerification ? user.libre : null,
+        tradeLicensePhoto: includeSensitiveVerification ? user.tradeLicensePhoto : null,
+        tradeRegistrationCertificatePhoto: includeSensitiveVerification
+          ? user.tradeRegistrationCertificatePhoto
+          : null,
         verificationNote: includeSensitiveVerification ? user.verificationNote : null,
         verificationSubmittedAt: includeSensitiveVerification
           ? user.verificationSubmittedAt
@@ -805,8 +830,15 @@ app.put('/api/users/:userId/verification-documents', requireAuth, async (req: Au
   try {
     const userId = asSingleParam(req.params.userId);
     const callerId = req.auth?.userId;
+    const tinNumber = String(req.body?.tinNumber || '').trim();
+    const libre = String(req.body?.libre || '').trim();
+    const vehiclePlateNumber = String(req.body?.vehiclePlateNumber || '').trim();
     const nationalIdPhoto = String(req.body?.nationalIdPhoto || '').trim();
     const driverLicensePhoto = String(req.body?.driverLicensePhoto || '').trim();
+    const tradeLicensePhoto = String(req.body?.tradeLicensePhoto || '').trim();
+    const tradeRegistrationCertificatePhoto = String(
+      req.body?.tradeRegistrationCertificatePhoto || '',
+    ).trim();
     const submitForReview = Boolean(req.body?.submitForReview);
 
     if (!callerId) {
@@ -842,8 +874,36 @@ app.put('/api/users/:userId/verification-documents', requireAuth, async (req: Au
         return;
       }
 
-      if (user.userType === 'Driver' && !driverLicensePhoto) {
-        res.status(400).json({ ok: false, error: 'Driver\'s license is required before submission.' });
+      if (!tinNumber) {
+        res.status(400).json({ ok: false, error: 'TIN number is required before submission.' });
+        return;
+      }
+
+      if (!tradeLicensePhoto) {
+        res.status(400).json({ ok: false, error: 'Trade licence photo is required before submission.' });
+        return;
+      }
+
+      if (user.userType === 'Driver') {
+        if (!libre) {
+          res.status(400).json({ ok: false, error: 'Libre is required before submission.' });
+          return;
+        }
+
+        if (!vehiclePlateNumber) {
+          res.status(400).json({ ok: false, error: 'Vehicle plate number is required before submission.' });
+          return;
+        }
+
+        if (!driverLicensePhoto) {
+          res.status(400).json({ ok: false, error: 'Driver\'s license is required before submission.' });
+          return;
+        }
+      } else if (!tradeRegistrationCertificatePhoto) {
+        res.status(400).json({
+          ok: false,
+          error: 'Trade registration certificate photo is required before submission.',
+        });
         return;
       }
     }
@@ -858,9 +918,16 @@ app.put('/api/users/:userId/verification-documents', requireAuth, async (req: Au
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
+        tinNumber: tinNumber || null,
+        libre: user.userType === 'Driver' ? (libre || null) : null,
+        licensePlate: user.userType === 'Driver' ? (vehiclePlateNumber || null) : null,
         idPhoto: nationalIdPhoto || null,
         licenseNumberPhoto: user.userType === 'Driver'
           ? (driverLicensePhoto || null)
+          : null,
+        tradeLicensePhoto: tradeLicensePhoto || null,
+        tradeRegistrationCertificatePhoto: user.userType === 'Cargo'
+          ? (tradeRegistrationCertificatePhoto || null)
           : null,
         verificationStatus: nextStatus,
         verificationNote: submitForReview
@@ -2243,7 +2310,7 @@ app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => 
         region: row.endRegion,
         fallback: row.end,
       });
-      const start = startLocation.city ?? 'Unknown origin';
+      const start = startLocation.city ?? 'Unknown departure';
       const end = endLocation.city ?? 'Unknown destination';
       const key = `${start}__${end}`;
       const route = `${start} -> ${end}`;
@@ -2343,7 +2410,7 @@ app.get('/api/admin/dashboard', requireAuth, requireAdmin, async (_req, res) => 
           end: endLocation.label || load.end,
           startDisplay: startLocation.label,
           endDisplay: endLocation.label,
-          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown origin'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
+          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown departure'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
           startCity: startLocation.city,
           startZone: startLocation.zone,
           startRegion: startLocation.region,
@@ -2428,8 +2495,13 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
         verificationNote: true,
         verificationSubmittedAt: true,
         verificationReviewedAt: true,
+        tinNumber: true,
+        libre: true,
+        licensePlate: true,
         idPhoto: true,
         licenseNumberPhoto: true,
+        tradeLicensePhoto: true,
+        tradeRegistrationCertificatePhoto: true,
         isAdmin: true,
         isSuperAdmin: true,
         createdAt: true,
@@ -2541,7 +2613,7 @@ app.get('/api/admin/loads', requireAuth, requireAdmin, async (req, res) => {
           end: endLocation.label || load.end,
           startDisplay: startLocation.label,
           endDisplay: endLocation.label,
-          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown origin'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
+          routeDisplay: `${startLocation.label || startLocation.city || 'Unknown departure'} -> ${endLocation.label || endLocation.city || 'Unknown destination'}`,
           startCity: startLocation.city,
           startZone: startLocation.zone,
           startRegion: startLocation.region,
@@ -2585,8 +2657,13 @@ app.get('/api/admin/users/pending-verification', requireAuth, requireAdmin, asyn
         verificationNote: true,
         verificationSubmittedAt: true,
         verificationReviewedAt: true,
+        tinNumber: true,
+        libre: true,
+        licensePlate: true,
         idPhoto: true,
         licenseNumberPhoto: true,
+        tradeLicensePhoto: true,
+        tradeRegistrationCertificatePhoto: true,
       },
       orderBy: { verificationSubmittedAt: 'asc' },
     });
@@ -2627,8 +2704,13 @@ app.patch('/api/admin/users/:userId/verification', requireAuth, requireAdmin, as
         verificationNote: true,
         verificationSubmittedAt: true,
         verificationReviewedAt: true,
+        tinNumber: true,
+        libre: true,
+        licensePlate: true,
         idPhoto: true,
         licenseNumberPhoto: true,
+        tradeLicensePhoto: true,
+        tradeRegistrationCertificatePhoto: true,
       },
     });
 

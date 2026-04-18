@@ -53,33 +53,36 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
     final threads = (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .map((messageData) {
-      final timestampRaw = messageData['createdAt']?.toString();
-      final timestamp = timestampRaw == null
-          ? DateTime.now()
-          : DateTime.tryParse(timestampRaw) ?? DateTime.now();
-      return ThreadMessage(
-        id: (messageData['id'] ?? '').toString(),
-        docId: (messageData['id'] ?? '').toString(),
-        senderName: user.name,
-        senderProfileImageUrl: user.profileImageUrl ??
-            'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRz8cLf8-P2P8GZ0-KiQ-OXpZQ4bebpa3K3Dw&usqp=CAU',
-        message: (messageData['message'] ?? '').toString(),
-        timestamp: timestamp,
-        likes: const [],
-        comments: const [],
-        weight: (messageData['weight'] as num?)?.toDouble() ?? 0.0,
-        type: (messageData['type'] ?? '').toString(),
-        start: (messageData['start'] ?? '').toString(),
-        end: (messageData['end'] ?? '').toString(),
-        packaging: (messageData['packaging'] ?? '').toString(),
-        weightUnit: (messageData['weightUnit'] ?? '').toString(),
-        startLat: (messageData['startLat'] as num?)?.toDouble() ?? 0.0,
-        startLng: (messageData['startLng'] as num?)?.toDouble() ?? 0.0,
-        endLat: (messageData['endLat'] as num?)?.toDouble() ?? 0.0,
-        endLng: (messageData['endLng'] as num?)?.toDouble() ?? 0.0,
-        deliveryStatus: messageData['deliveryStatus']?.toString(),
-      );
-    }).toList();
+          final timestampRaw = messageData['createdAt']?.toString();
+          final timestamp = timestampRaw == null
+              ? DateTime.now()
+              : DateTime.tryParse(timestampRaw) ?? DateTime.now();
+          return ThreadMessage(
+            id: (messageData['id'] ?? '').toString(),
+            docId: (messageData['id'] ?? '').toString(),
+            senderName: user.name,
+            senderProfileImageUrl:
+                user.profileImageUrl ??
+                'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRz8cLf8-P2P8GZ0-KiQ-OXpZQ4bebpa3K3Dw&usqp=CAU',
+            ownerId: (messageData['ownerId'] ?? user.id).toString(),
+            message: (messageData['message'] ?? '').toString(),
+            timestamp: timestamp,
+            likes: const [],
+            comments: const [],
+            weight: (messageData['weight'] as num?)?.toDouble() ?? 0.0,
+            type: (messageData['type'] ?? '').toString(),
+            start: (messageData['start'] ?? '').toString(),
+            end: (messageData['end'] ?? '').toString(),
+            packaging: (messageData['packaging'] ?? '').toString(),
+            weightUnit: (messageData['weightUnit'] ?? '').toString(),
+            startLat: (messageData['startLat'] as num?)?.toDouble() ?? 0.0,
+            startLng: (messageData['startLng'] as num?)?.toDouble() ?? 0.0,
+            endLat: (messageData['endLat'] as num?)?.toDouble() ?? 0.0,
+            endLng: (messageData['endLng'] as num?)?.toDouble() ?? 0.0,
+            deliveryStatus: messageData['deliveryStatus']?.toString(),
+          );
+        })
+        .toList();
 
     return threads;
   }
@@ -133,19 +136,24 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                           const SizedBox(height: 20),
                           if (user.userType == 'Driver') ...[
                             Text(
-                                "${localizations.tr('truckType')}: ${user.truckType ?? 'N/A'}"),
+                              "${localizations.tr('truckType')}: ${user.truckType ?? 'N/A'}",
+                            ),
                             const SizedBox(height: 10),
                             Text(
-                                "${localizations.tr('licensePlate')}: ${user.licensePlate ?? 'N/A'}"),
+                              "${localizations.tr('licensePlate')}: ${user.licensePlate ?? 'N/A'}",
+                            ),
                             const SizedBox(height: 10),
                             Text(
-                                "${localizations.tr('licenseNumber')}: ${user.licenseNumber ?? 'N/A'}"),
+                              "${localizations.tr('licenseNumber')}: ${user.licenseNumber ?? 'N/A'}",
+                            ),
                             const SizedBox(height: 10),
                             Text(
-                                "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}"),
+                              "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}",
+                            ),
                           ] else if (user.userType == 'Cargo') ...[
                             Text(
-                                "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}"),
+                              "${localizations.tr('tradeLicenseLabel')}: ${user.tradeLicense ?? 'N/A'}",
+                            ),
                           ],
                           const SizedBox(height: 25),
                           Expanded(
@@ -156,7 +164,9 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                                   final userThreads = snapshot.data!;
                                   if (userThreads.isEmpty) {
                                     return Center(
-                                      child: Text(localizations.tr('noLoadsPostedYet')),
+                                      child: Text(
+                                        localizations.tr('noLoadsPostedYet'),
+                                      ),
                                     );
                                   }
                                   return ListView.builder(
@@ -170,9 +180,9 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                                             MaterialPageRoute(
                                               builder: (context) =>
                                                   CommentScreen(
-                                                message: message,
-                                                threadId: message.docId,
-                                              ),
+                                                    message: message,
+                                                    threadId: message.docId,
+                                                  ),
                                             ),
                                           );
                                         },
@@ -188,13 +198,13 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                                               MaterialPageRoute(
                                                 builder: (context) =>
                                                     CommentScreen(
-                                                  message: message,
-                                                  threadId: message.docId,
-                                                ),
+                                                      message: message,
+                                                      threadId: message.docId,
+                                                    ),
                                               ),
                                             );
                                           },
-                                          onProfileTap: () {},
+                                          onProfileTap: null,
                                           userId: '',
                                           panelController: panelController,
                                           showBidButton: false,
@@ -222,15 +232,18 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
   Future<void> likeThreadMessage(String id) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context).tr('likesSyncMigration'))),
+      SnackBar(
+        content: Text(AppLocalizations.of(context).tr('likesSyncMigration')),
+      ),
     );
   }
 
   Future<void> dislikeThreadMessage(String id) async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context).tr('likesSyncMigration'))),
+      SnackBar(
+        content: Text(AppLocalizations.of(context).tr('likesSyncMigration')),
+      ),
     );
   }
 }
-

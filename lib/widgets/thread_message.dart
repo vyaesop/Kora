@@ -13,7 +13,7 @@ class ThreadMessageWidget extends StatelessWidget {
   final VoidCallback onLike;
   final VoidCallback onDisLike;
   final VoidCallback onComment;
-  final VoidCallback onProfileTap;
+  final VoidCallback? onProfileTap;
   final dynamic panelController;
   final String userId;
   final bool showBidButton;
@@ -37,22 +37,28 @@ class ThreadMessageWidget extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final localizations = AppLocalizations.of(context);
-    final statusLabel =
-        deliveryStatusLabel(message.deliveryStatus ?? 'pending_bids');
+    final statusLabel = deliveryStatusLabel(
+      message.deliveryStatus ?? 'pending_bids',
+    );
     final statusColor = _statusColor(message.deliveryStatus);
     final relativeTime = _relativeTime(message.timestamp, localizations);
     final senderName = message.senderName.isEmpty
         ? localizations.tr('cargoLabel')
         : message.senderName;
+    final isOwnLoad = userId.isNotEmpty && message.ownerId == userId;
+    final cardColor = isOwnLoad
+        ? (isDark ? const Color(0xFF18283F) : const Color(0xFFF7F3EA))
+        : (isDark ? const Color(0xFF142033) : Colors.white);
+    final borderColor = isOwnLoad
+        ? (isDark ? const Color(0xFF45607C) : const Color(0xFFD7C4A3))
+        : (isDark ? const Color(0xFF243247) : const Color(0xFFE5E7EB));
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF142033) : Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: isDark ? const Color(0xFF243247) : const Color(0xFFE5E7EB),
-        ),
+        border: Border.all(color: borderColor, width: isOwnLoad ? 1.4 : 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha((0.05 * 255).round()),
@@ -68,14 +74,45 @@ class ThreadMessageWidget extends StatelessWidget {
           children: [
             Row(
               children: [
-                GestureDetector(
-                  onTap: onProfileTap,
-                  child: ProfileAvatar(
+                if (onProfileTap != null)
+                  GestureDetector(
+                    onTap: onProfileTap,
+                    child: ProfileAvatar(
+                      radius: 18,
+                      imageUrl: message.senderProfileImageUrl,
+                    ),
+                  )
+                else
+                  ProfileAvatar(
                     radius: 18,
                     imageUrl: message.senderProfileImageUrl,
                   ),
-                ),
                 const SizedBox(width: 10),
+                if (isOwnLoad) ...[
+                  Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF20314A)
+                          : const Color(0xFFEADFC7),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'Your load',
+                      style: GoogleFonts.manrope(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? const Color(0xFFF4E7CF)
+                            : const Color(0xFF7A5B24),
+                      ),
+                    ),
+                  ),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,8 +141,10 @@ class ThreadMessageWidget extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withAlpha((0.12 * 255).round()),
                     borderRadius: BorderRadius.circular(16),
@@ -125,7 +164,9 @@ class ThreadMessageWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF8FAFC),
+                color: isDark
+                    ? const Color(0xFF101B2D)
+                    : const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isDark
@@ -142,10 +183,10 @@ class ThreadMessageWidget extends StatelessWidget {
                       Expanded(
                         child: _RouteStopCard(
                           isDark: isDark,
-                          label: localizations.tr('pickup'),
+                          label: localizations.tr('departure'),
                           value: message.start,
                           icon: Icons.trip_origin,
-                          color: const Color(0xFF0EA5E9),
+                          color: const Color(0xFF5B8C85),
                         ),
                       ),
                       Padding(
@@ -155,10 +196,10 @@ class ThreadMessageWidget extends StatelessWidget {
                       Expanded(
                         child: _RouteStopCard(
                           isDark: isDark,
-                          label: localizations.tr('delivery'),
+                          label: localizations.tr('destination'),
                           value: message.end,
                           icon: Icons.location_on_outlined,
-                          color: const Color(0xFFF59E0B),
+                          color: const Color(0xFFC28C5A),
                         ),
                       ),
                     ],
@@ -341,9 +382,7 @@ class ThreadMessageWidget extends StatelessWidget {
             style: GoogleFonts.manrope(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: isDark
-                  ? const Color(0xFFE5EEF8)
-                  : const Color(0xFF334155),
+              color: isDark ? const Color(0xFFE5EEF8) : const Color(0xFF334155),
             ),
           ),
         ],
@@ -418,8 +457,7 @@ class _RouteStopCard extends StatelessWidget {
               fontWeight: FontWeight.w700,
               fontSize: 14,
               height: 1.2,
-              color:
-                  isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
+              color: isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
             ),
           ),
         ],
@@ -435,10 +473,12 @@ class _RouteConnector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final railColor =
-        isDark ? const Color(0xFF243247) : const Color(0xFFD8E1EC);
-    final arrowColor =
-        isDark ? AppPalette.darkTextSoft : const Color(0xFF64748B);
+    final railColor = isDark
+        ? const Color(0xFF243247)
+        : const Color(0xFFD8E1EC);
+    final arrowColor = isDark
+        ? AppPalette.darkTextSoft
+        : const Color(0xFF64748B);
 
     return SizedBox(
       width: 34,

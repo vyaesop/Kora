@@ -2,6 +2,20 @@ import 'package:flutter/material.dart';
 
 import 'package:kora/utils/backend_auth_service.dart';
 
+enum VerificationRequirementKind { number, text, photo }
+
+class VerificationRequirement {
+  final String key;
+  final String label;
+  final VerificationRequirementKind kind;
+
+  const VerificationRequirement({
+    required this.key,
+    required this.label,
+    required this.kind,
+  });
+}
+
 class VerificationAccess {
   static String normalizeStatus(String? raw) {
     final value = (raw ?? '').trim().toLowerCase();
@@ -16,10 +30,68 @@ class VerificationAccess {
 
   static bool isApproved(String? raw) => normalizeStatus(raw) == 'approved';
 
+  static List<VerificationRequirement> requiredRequirements(String userType) {
+    if (userType == 'Driver') {
+      return const [
+        VerificationRequirement(
+          key: 'tinNumber',
+          label: 'TIN number',
+          kind: VerificationRequirementKind.number,
+        ),
+        VerificationRequirement(
+          key: 'libre',
+          label: 'Libre',
+          kind: VerificationRequirementKind.text,
+        ),
+        VerificationRequirement(
+          key: 'vehiclePlateNumber',
+          label: 'Vehicle plate number',
+          kind: VerificationRequirementKind.text,
+        ),
+        VerificationRequirement(
+          key: 'nationalIdPhoto',
+          label: 'National ID',
+          kind: VerificationRequirementKind.photo,
+        ),
+        VerificationRequirement(
+          key: 'driverLicensePhoto',
+          label: 'Driver\'s license',
+          kind: VerificationRequirementKind.photo,
+        ),
+        VerificationRequirement(
+          key: 'tradeLicensePhoto',
+          label: 'Trade licence photo',
+          kind: VerificationRequirementKind.photo,
+        ),
+      ];
+    }
+
+    return const [
+      VerificationRequirement(
+        key: 'tinNumber',
+        label: 'TIN number',
+        kind: VerificationRequirementKind.number,
+      ),
+      VerificationRequirement(
+        key: 'nationalIdPhoto',
+        label: 'National ID',
+        kind: VerificationRequirementKind.photo,
+      ),
+      VerificationRequirement(
+        key: 'tradeRegistrationCertificatePhoto',
+        label: 'Trade registration certificate photo',
+        kind: VerificationRequirementKind.photo,
+      ),
+      VerificationRequirement(
+        key: 'tradeLicensePhoto',
+        label: 'Trade licence photo',
+        kind: VerificationRequirementKind.photo,
+      ),
+    ];
+  }
+
   static List<String> requiredDocuments(String userType) {
-    return userType == 'Driver'
-        ? const ['National ID', 'Driver\'s license']
-        : const ['National ID'];
+    return requiredRequirements(userType).map((item) => item.label).toList();
   }
 
   static String statusTitle(String? raw) {
@@ -45,7 +117,7 @@ class VerificationAccess {
       case 'approved':
         return 'Your documents are approved. You can post loads or place bids normally.';
       case 'submitted':
-        return 'Your documents are with the admin team now. You can explore the app while approval is pending.';
+        return 'Your verification has been sent to the admin team. You can keep browsing while approval is pending.';
       case 'rejected':
         final trimmedNote = (note ?? '').trim();
         if (trimmedNote.isNotEmpty) {
@@ -53,8 +125,9 @@ class VerificationAccess {
         }
         return 'Your previous submission needs an update before approval.';
       default:
-        final docs = requiredDocuments(userType).join(' and ');
-        return 'Upload $docs from your profile to unlock restricted actions.';
+        return userType == 'Driver'
+            ? 'Add your TIN number, libre, vehicle plate number, and required photos to unlock bidding.'
+            : 'Add your TIN number and required business photos to unlock posting.';
     }
   }
 
@@ -83,13 +156,12 @@ class VerificationAccess {
       return false;
     }
 
-    final docs = requiredDocuments(expectedUserType).join(' and ');
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('$actionLabel is locked for now'),
         content: Text(
-          'To $actionLabel, upload $docs from Profile > Verification and submit them for admin approval.\n\n${statusDescription(userType: expectedUserType, status: verificationStatus, note: verificationNote)}',
+          'To $actionLabel, complete the verification requirements in Profile > Verification and submit them for admin approval.\n\n${statusDescription(userType: expectedUserType, status: verificationStatus, note: verificationNote)}',
         ),
         actions: [
           TextButton(

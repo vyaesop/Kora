@@ -52,15 +52,20 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
     final threads = (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
         .where(
-          (thread) => (thread['deliveryStatus'] ?? 'pending_bids').toString() ==
+          (thread) =>
+              (thread['deliveryStatus'] ?? 'pending_bids').toString() ==
               'pending_bids',
         )
         .toList();
     final driverCity = await SessionPreferences.getDriverCity();
     if (driverCity != null && driverCity.trim().isNotEmpty) {
       final normalized = _normalizeCity(driverCity);
-      threads.sort((a, b) =>
-          _cityMatchScore(b, normalized).compareTo(_cityMatchScore(a, normalized)));
+      threads.sort(
+        (a, b) => _cityMatchScore(
+          b,
+          normalized,
+        ).compareTo(_cityMatchScore(a, normalized)),
+      );
     }
 
     return threads.take(4).toList();
@@ -94,6 +99,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
       docId: (row['id'] ?? '').toString(),
       senderName: (owner['name'] ?? 'Load Owner').toString(),
       senderProfileImageUrl: (owner['profileImageUrl'] ?? '').toString(),
+      ownerId: (row['ownerId'] ?? owner['id'] ?? '').toString(),
       message: (row['message'] ?? '').toString(),
       timestamp: createdAt,
       likes: const [],
@@ -118,10 +124,10 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
   }
 
   int _cityMatchScore(Map<String, dynamic> thread, String driverCity) {
-    final startRaw =
-        (thread['startCity'] ?? thread['start'] ?? '').toString().trim();
-    final endRaw =
-        (thread['endCity'] ?? thread['end'] ?? '').toString().trim();
+    final startRaw = (thread['startCity'] ?? thread['start'] ?? '')
+        .toString()
+        .trim();
+    final endRaw = (thread['endCity'] ?? thread['end'] ?? '').toString().trim();
     final start = startRaw.isEmpty ? '' : _normalizeCity(startRaw);
     final end = endRaw.isEmpty ? '' : _normalizeCity(endRaw);
 
@@ -159,7 +165,9 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
           ? null
           : AppBar(
               automaticallyImplyLeading: false,
-              title: Text('${localizations.tr('welcome')}, ${widget.user.name}'),
+              title: Text(
+                '${localizations.tr('welcome')}, ${widget.user.name}',
+              ),
               actions: const [
                 Padding(
                   padding: EdgeInsets.only(right: 12),
@@ -179,9 +187,8 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                     Expanded(
                       child: Text(
                         '${localizations.tr('welcome')}, ${widget.user.name}',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
                     const LanguageSwitcher(),
@@ -211,7 +218,9 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                   ),
                   _HeroMetricData(
                     label: localizations.tr('profile'),
-                    value: VerificationAccess.statusTitle(widget.user.verificationStatus),
+                    value: VerificationAccess.statusTitle(
+                      widget.user.verificationStatus,
+                    ),
                   ),
                 ],
               ),
@@ -228,7 +237,8 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                     child: _QuickActionCard(
                       icon: Icons.route_outlined,
                       title: localizations.tr('openFeed'),
-                      subtitle: 'Browse open loads without the extra search step.',
+                      subtitle:
+                          'Browse open loads without the extra search step.',
                       onTap: widget.onContinueToFeed,
                     ),
                   ),
@@ -237,7 +247,8 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                     child: _QuickActionCard(
                       icon: Icons.badge_outlined,
                       title: localizations.tr('profile'),
-                      subtitle: 'Manage notifications and track verification progress.',
+                      subtitle:
+                          'Manage notifications and track verification progress.',
                       onTap: widget.onOpenProfile,
                     ),
                   ),
@@ -275,8 +286,8 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                       final end = (data['end'] ?? 'Unknown').toString();
                       final unit = (data['weightUnit'] ?? 'kg').toString();
                       final weight = (data['weight'] as num?)?.toDouble();
-                      final status =
-                          (data['deliveryStatus'] ?? 'pending_bids').toString();
+                      final status = (data['deliveryStatus'] ?? 'pending_bids')
+                          .toString();
                       return _LoadCard(
                         title: '$start -> $end',
                         subtitle:
@@ -330,8 +341,9 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                           onPressed: () => _openLoadDetails(context, data),
                           child: const Text('Open'),
                         ),
-                        footer: (data['type'] ?? localizations.tr('searchGeneral'))
-                            .toString(),
+                        footer:
+                            (data['type'] ?? localizations.tr('searchGeneral'))
+                                .toString(),
                         onTap: () => _openLoadDetails(context, data),
                       );
                     },
@@ -346,10 +358,10 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
           ? null
           : BottomNavigationBar(
               currentIndex: 0,
-              selectedItemColor:
-                  isDark ? AppPalette.darkText : AppPalette.ink,
-              unselectedItemColor:
-                  isDark ? AppPalette.darkTextSoft : Colors.grey,
+              selectedItemColor: isDark ? AppPalette.darkText : AppPalette.ink,
+              unselectedItemColor: isDark
+                  ? AppPalette.darkTextSoft
+                  : Colors.grey,
               showSelectedLabels: true,
               showUnselectedLabels: true,
               type: BottomNavigationBarType.fixed,
@@ -427,25 +439,25 @@ class _DashboardHero extends StatelessWidget {
           Text(
             eyebrow,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: Colors.white70,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
             title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             subtitle,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
-                  height: 1.45,
-                ),
+              color: Colors.white70,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -453,10 +465,8 @@ class _DashboardHero extends StatelessWidget {
             runSpacing: 10,
             children: metrics
                 .map(
-                  (metric) => _MetricCard(
-                    label: metric.label,
-                    value: metric.value,
-                  ),
+                  (metric) =>
+                      _MetricCard(label: metric.label, value: metric.value),
                 )
                 .toList(),
           ),
@@ -500,20 +510,14 @@ class _HeroMetricData {
   final String label;
   final String value;
 
-  const _HeroMetricData({
-    required this.label,
-    required this.value,
-  });
+  const _HeroMetricData({required this.label, required this.value});
 }
 
 class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
 
-  const _MetricCard({
-    required this.label,
-    required this.value,
-  });
+  const _MetricCard({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -522,9 +526,7 @@ class _MetricCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withAlpha((0.12 * 255).round()),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withAlpha((0.16 * 255).round()),
-        ),
+        border: Border.all(color: Colors.white.withAlpha((0.16 * 255).round())),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -532,16 +534,16 @@ class _MetricCard extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white70,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(color: Colors.white70),
           ),
         ],
       ),
@@ -553,10 +555,7 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _SectionHeader({
-    required this.title,
-    required this.subtitle,
-  });
+  const _SectionHeader({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -567,16 +566,16 @@ class _SectionHeader extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppPalette.ink,
-              ),
+            fontWeight: FontWeight.w700,
+            color: AppPalette.ink,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-              ),
+            color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+          ),
         ),
       ],
     );
@@ -635,17 +634,17 @@ class _QuickActionCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                    height: 1.4,
-                  ),
+                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -696,18 +695,17 @@ class _LoadCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         subtitle,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: isDark
-                                  ? AppPalette.darkTextSoft
-                                  : Colors.black54,
-                            ),
+                          color: isDark
+                              ? AppPalette.darkTextSoft
+                              : Colors.black54,
+                        ),
                       ),
                     ],
                   ),
@@ -720,11 +718,11 @@ class _LoadCard extends StatelessWidget {
             Text(
               footer,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark
-                        ? AppPalette.darkTextSoft
-                        : const Color(0xFF475569),
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: isDark
+                    ? AppPalette.darkTextSoft
+                    : const Color(0xFF475569),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -745,8 +743,8 @@ class _StatusPill extends StatelessWidget {
     final color = normalized == 'pending_bids'
         ? Colors.orange
         : normalized == 'delivered'
-            ? Colors.green
-            : Colors.blue;
+        ? Colors.green
+        : Colors.blue;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -808,23 +806,20 @@ class _EmptyState extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(
             subtitle,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                ),
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+            ),
           ),
           if (buttonText != null && onTap != null) ...[
             const SizedBox(height: 14),
-            ElevatedButton(
-              onPressed: onTap,
-              child: Text(buttonText!),
-            ),
+            ElevatedButton(onPressed: onTap, child: Text(buttonText!)),
           ],
         ],
       ),

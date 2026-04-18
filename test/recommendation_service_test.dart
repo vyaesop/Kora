@@ -12,6 +12,7 @@ ThreadMessage _thread({
     docId: 'doc',
     senderName: 'sender',
     senderProfileImageUrl: '',
+    ownerId: 'owner',
     message: 'msg',
     timestamp: DateTime.now(),
     likes: const [],
@@ -32,7 +33,11 @@ ThreadMessage _thread({
 void main() {
   group('RecommendationService.scoreLoad', () {
     test('rewards route fit and route token matches', () {
-      final thread = _thread(start: 'Addis Ababa, Addis Ababa', end: 'Adama, Oromia', weight: 3000);
+      final thread = _thread(
+        start: 'Addis Ababa, Addis Ababa',
+        end: 'Adama, Oromia',
+        weight: 3000,
+      );
       final score = RecommendationService.scoreLoad(
         thread: thread,
         routeFits: true,
@@ -54,4 +59,3 @@ void main() {
     });
   });
 }
-

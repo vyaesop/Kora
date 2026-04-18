@@ -107,6 +107,7 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
       docId: (thread['id'] ?? '').toString(),
       senderName: 'Load Owner',
       senderProfileImageUrl: '',
+      ownerId: (thread['ownerId'] ?? '').toString(),
       message: (thread['message'] ?? '').toString(),
       timestamp: createdAt,
       likes: const [],
@@ -230,7 +231,9 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                 'pending';
           }).length;
           final activeCount = bids.where((bid) {
-            final status = (bid['status'] ?? 'pending').toString().toLowerCase();
+            final status = (bid['status'] ?? 'pending')
+                .toString()
+                .toLowerCase();
             return status == 'accepted' || status == 'completed';
           }).length;
 
@@ -271,7 +274,10 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          _HeroStat(label: 'Total bids', value: '${bids.length}'),
+                          _HeroStat(
+                            label: 'Total bids',
+                            value: '${bids.length}',
+                          ),
                           _HeroStat(label: 'Pending', value: '$pendingCount'),
                           _HeroStat(label: 'Won', value: '$activeCount'),
                         ],
@@ -290,7 +296,8 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                 else
                   ...bids.map((bid) {
                     final bidId = (bid['id'] ?? '').toString();
-                    final thread = (bid['load'] as Map<String, dynamic>? ??
+                    final thread =
+                        (bid['load'] as Map<String, dynamic>? ??
                         const <String, dynamic>{});
                     final amount = (bid['amount'] as num?)?.toDouble() ?? 0.0;
                     final currency = (bid['currency'] ?? 'Birr').toString();
@@ -417,7 +424,10 @@ class _BidCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withAlpha((0.14 * 255).round()),
                   borderRadius: BorderRadius.circular(14),
@@ -450,10 +460,7 @@ class _BidCard extends StatelessWidget {
                     color: statusColor.withAlpha((0.12 * 255).round()),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(
-                    Icons.payments_outlined,
-                    color: statusColor,
-                  ),
+                  child: Icon(Icons.payments_outlined, color: statusColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -486,11 +493,7 @@ class _BidCard extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: meta
-                  .map(
-                    (item) => _MetaPill(label: item),
-                  )
-                  .toList(),
+              children: meta.map((item) => _MetaPill(label: item)).toList(),
             ),
           ],
           const SizedBox(height: 14),
@@ -526,10 +529,7 @@ class _HeroStat extends StatelessWidget {
   final String label;
   final String value;
 
-  const _HeroStat({
-    required this.label,
-    required this.value,
-  });
+  const _HeroStat({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -545,15 +545,15 @@ class _HeroStat extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
         ],
       ),
@@ -577,9 +577,9 @@ class _MetaPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }

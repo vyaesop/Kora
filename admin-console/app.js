@@ -248,10 +248,78 @@ function renderDocumentCard(label, source) {
 
 function renderVerificationDocuments(user) {
   const documents = [
+    user.tinNumber
+      ? `
+        <div class="document-card">
+          <div class="document-preview"><span>${escapeHtml(user.tinNumber)}</span></div>
+          <div class="document-meta">
+            <strong>TIN number</strong>
+            <span>Added</span>
+          </div>
+        </div>
+      `
+      : `
+        <div class="document-card document-card-empty">
+          <div class="document-preview"><span>No value</span></div>
+          <div class="document-meta">
+            <strong>TIN number</strong>
+            <span>Missing</span>
+          </div>
+        </div>
+      `,
+    user.userType === 'Driver'
+      ? user.libre
+        ? `
+          <div class="document-card">
+            <div class="document-preview"><span>${escapeHtml(user.libre)}</span></div>
+            <div class="document-meta">
+              <strong>Libre</strong>
+              <span>Added</span>
+            </div>
+          </div>
+        `
+        : `
+          <div class="document-card document-card-empty">
+            <div class="document-preview"><span>No value</span></div>
+            <div class="document-meta">
+              <strong>Libre</strong>
+              <span>Missing</span>
+            </div>
+          </div>
+        `
+      : '',
+    user.userType === 'Driver'
+      ? user.licensePlate
+        ? `
+          <div class="document-card">
+            <div class="document-preview"><span>${escapeHtml(user.licensePlate)}</span></div>
+            <div class="document-meta">
+              <strong>Vehicle plate number</strong>
+              <span>Added</span>
+            </div>
+          </div>
+        `
+        : `
+          <div class="document-card document-card-empty">
+            <div class="document-preview"><span>No value</span></div>
+            <div class="document-meta">
+              <strong>Vehicle plate number</strong>
+              <span>Missing</span>
+            </div>
+          </div>
+        `
+      : '',
     renderDocumentCard('National ID', user.idPhoto),
     user.userType === 'Driver'
       ? renderDocumentCard("Driver's license", user.licenseNumberPhoto)
       : '',
+    user.userType === 'Cargo'
+      ? renderDocumentCard(
+          'Trade registration certificate',
+          user.tradeRegistrationCertificatePhoto,
+        )
+      : '',
+    renderDocumentCard('Trade licence photo', user.tradeLicensePhoto),
   ]
     .filter(Boolean)
     .join('');
@@ -408,6 +476,21 @@ function renderPendingUsers(users) {
                     : ''
                 }
                 ${
+                  user.tinNumber
+                    ? `<span class="tag">TIN: ${escapeHtml(user.tinNumber)}</span>`
+                    : ''
+                }
+                ${
+                  user.libre
+                    ? `<span class="tag">Libre: ${escapeHtml(user.libre)}</span>`
+                    : ''
+                }
+                ${
+                  user.licensePlate
+                    ? `<span class="tag">Plate: ${escapeHtml(user.licensePlate)}</span>`
+                    : ''
+                }
+                ${
                   user.verificationSubmittedAt
                     ? `<span class="tag">Submitted: ${escapeHtml(formatDate(user.verificationSubmittedAt))}</span>`
                     : ''
@@ -515,6 +598,21 @@ function renderUsersManage(users) {
                 ${
                   user.phoneNumber
                     ? `<span class="tag">Phone: ${escapeHtml(user.phoneNumber)}</span>`
+                    : ''
+                }
+                ${
+                  user.tinNumber
+                    ? `<span class="tag">TIN: ${escapeHtml(user.tinNumber)}</span>`
+                    : ''
+                }
+                ${
+                  user.libre
+                    ? `<span class="tag">Libre: ${escapeHtml(user.libre)}</span>`
+                    : ''
+                }
+                ${
+                  user.licensePlate
+                    ? `<span class="tag">Plate: ${escapeHtml(user.licensePlate)}</span>`
                     : ''
                 }
                 ${

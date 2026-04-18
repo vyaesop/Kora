@@ -10,10 +10,10 @@ class UserModel {
   final String? link;
   final List following;
   final List followers;
-  
+
   // New fields for user categorization
   final String userType; // "Driver" or "Cargo"
-  
+
   // Driver-specific fields
   final String? truckType; // "Big", "Medium", "Small"
   final String? licensePlate;
@@ -21,8 +21,10 @@ class UserModel {
   final String? licenseNumberPhoto;
   final String? driverTradeLicensePhoto;
   final String? licenseNumber;
+  final String? libre;
   final String? tradeLicense; // Both user types can have trade licenses
   final String? tradeLicensePhoto; // Photo URL
+  final String? tradeRegistrationCertificatePhoto;
   final String? tinNumber; // TIN number
   final String? idPhoto; // ID photo URL
   final bool? isRepresentative; // Is representative
@@ -49,8 +51,10 @@ class UserModel {
     this.licenseNumberPhoto,
     this.driverTradeLicensePhoto,
     this.licenseNumber,
+    this.libre,
     this.tradeLicense,
     this.tradeLicensePhoto,
+    this.tradeRegistrationCertificatePhoto,
     this.tinNumber,
     this.idPhoto,
     this.isRepresentative,
@@ -79,8 +83,10 @@ class UserModel {
       'licenseNumberPhoto': licenseNumberPhoto,
       'driverTradeLicensePhoto': driverTradeLicensePhoto,
       'licenseNumber': licenseNumber,
+      'libre': libre,
       'tradeLicense': tradeLicense,
       'tradeLicensePhoto': tradeLicensePhoto,
+      'tradeRegistrationCertificatePhoto': tradeRegistrationCertificatePhoto,
       'tinNumber': tinNumber,
       'idPhoto': idPhoto,
       'isRepresentative': isRepresentative,
@@ -98,31 +104,55 @@ class UserModel {
       id: map['id'] as String,
       name: map['name'] as String,
       username: map['username'] as String,
-      profileImageUrl: map['profileImageUrl'] != null ? map['profileImageUrl'] as String : null,
+      profileImageUrl: map['profileImageUrl'] != null
+          ? map['profileImageUrl'] as String
+          : null,
       bio: map['bio'] != null ? map['bio'] as String : null,
       link: map['link'] != null ? map['link'] as String : null,
       followers: List.from((map['followers'] as List)),
       following: List.from((map['following'] as List)),
       userType: map['userType'] as String, // Extract userType
       truckType: map['truckType'] != null ? map['truckType'] as String : null,
-      licensePlate: map['licensePlate'] != null ? map['licensePlate'] as String : null,
+      licensePlate: map['licensePlate'] != null
+          ? map['licensePlate'] as String
+          : null,
       insurance: map['insurance'] != null ? map['insurance'] as String : null,
-      licenseNumberPhoto: map['licenseNumberPhoto'] != null ? map['licenseNumberPhoto'] as String : null,
-      driverTradeLicensePhoto: map['driverTradeLicensePhoto'] != null ? map['driverTradeLicensePhoto'] as String : null,
-      licenseNumber: map['licenseNumber'] != null ? map['licenseNumber'] as String : null,
-      tradeLicense: map['tradeLicense'] != null ? map['tradeLicense'] as String : null,
-      tradeLicensePhoto: map['tradeLicensePhoto'] != null ? map['tradeLicensePhoto'] as String : null,
+      licenseNumberPhoto: map['licenseNumberPhoto'] != null
+          ? map['licenseNumberPhoto'] as String
+          : null,
+      driverTradeLicensePhoto: map['driverTradeLicensePhoto'] != null
+          ? map['driverTradeLicensePhoto'] as String
+          : null,
+      licenseNumber: map['licenseNumber'] != null
+          ? map['licenseNumber'] as String
+          : null,
+      libre: map['libre'] != null ? map['libre'] as String : null,
+      tradeLicense: map['tradeLicense'] != null
+          ? map['tradeLicense'] as String
+          : null,
+      tradeLicensePhoto: map['tradeLicensePhoto'] != null
+          ? map['tradeLicensePhoto'] as String
+          : null,
+      tradeRegistrationCertificatePhoto:
+          map['tradeRegistrationCertificatePhoto'] != null
+          ? map['tradeRegistrationCertificatePhoto'] as String
+          : null,
       tinNumber: map['tinNumber'] != null ? map['tinNumber'] as String : null,
       idPhoto: map['idPhoto'] != null ? map['idPhoto'] as String : null,
       isRepresentative: map['isRepresentative'] ?? false,
-      representativePhoto: map['representativePhoto'] != null ? map['representativePhoto'] as String : null,
+      representativePhoto: map['representativePhoto'] != null
+          ? map['representativePhoto'] as String
+          : null,
       acceptedLoads: map['acceptedLoads'] != null
           ? List<String>.from(map['acceptedLoads'])
           : [],
-      address: map['address'] != null ? map['address'] as String : null, // Add this line
+      address: map['address'] != null
+          ? map['address'] as String
+          : null, // Add this line
       termsAccepted: map['termsAccepted'] == true,
       privacyAccepted: map['privacyAccepted'] == true,
-      verificationStatus: (map['verificationStatus'] ?? 'not_submitted').toString(),
+      verificationStatus: (map['verificationStatus'] ?? 'not_submitted')
+          .toString(),
     );
   }
 
@@ -131,4 +161,3 @@ class UserModel {
   factory UserModel.fromJson(String source) =>
       UserModel.fromMap(json.decode(source) as Map<String, dynamic>);
 }
-

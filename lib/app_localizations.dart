@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final appLocalizationsProvider = Provider<AppLocalizations>((ref) {
   throw UnimplementedError(
-      'appLocalizationsProvider must be overridden in ProviderScope');
+    'appLocalizationsProvider must be overridden in ProviderScope',
+  );
 });
 
 final localeProvider = StateProvider<Locale?>((ref) => null);
@@ -19,11 +20,7 @@ class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations)!;
   }
 
-  static const supportedLocales = [
-    Locale('en'),
-    Locale('am'),
-    Locale('om'),
-  ];
+  static const supportedLocales = [Locale('en'), Locale('am'), Locale('om')];
 
   static const Map<String, Map<String, String>> _localizedValues = {
     'en': {
@@ -32,7 +29,8 @@ class AppLocalizations {
       'loginSubtitle': 'Sign in to continue managing your loads and bids.',
       'signup': 'Sign up',
       'signupTitle': 'Create your account',
-      'signupSubtitle': 'Join as a driver or cargo owner to start posting and bidding loads.',
+      'signupSubtitle':
+          'Join as a driver or cargo owner to start posting and bidding loads.',
       'emailLabel': 'Email',
       'email': 'Enter your email',
       'passwordLabel': 'Password',
@@ -66,7 +64,8 @@ class AppLocalizations {
       'forgotPasswordBody':
           'Enter the phone number linked to your account. We will send a reset code via Telegram.',
       'sendResetLink': 'Send reset link',
-      'resetEmailSent': 'If this email exists, a reset link will be sent shortly.',
+      'resetEmailSent':
+          'If this email exists, a reset link will be sent shortly.',
       'resetEmailFailed': 'We could not start a reset. Please try again.',
       'phoneVerifyTitle': 'Verify your phone',
       'phoneVerifySubtitle':
@@ -117,7 +116,7 @@ class AppLocalizations {
       'suredelpost': 'Are you sure you want to delete this post?',
       'yes': 'Yes',
       'no': 'No',
-      'DEP': 'Origin',
+      'DEP': 'Departure',
       'DEST': 'Destination',
       'WEIGHT': 'WEIGHT',
       'TYPE': 'TYPE',
@@ -154,7 +153,8 @@ class AppLocalizations {
       'myBids': 'My Bids',
       'searchLoads': 'Search Loads',
       'feedTitle': 'Freight Exchange',
-      'feedSubtitle': 'Live loads from verified shippers, updated in real time.',
+      'feedSubtitle':
+          'Live loads from verified shippers, updated in real time.',
       'openLoads': 'Open Loads',
       'closedLoads': 'Closed Loads',
       'avgWeight': 'Avg Weight',
@@ -166,11 +166,13 @@ class AppLocalizations {
       'cargoControlTitle': 'Cargo Control Center',
       'cargoControlSubtitle':
           'Post loads, review recent activity, and move quickly to tracking and profile actions.',
-      'cargoQuickActionsHint': 'Post a new load or review your recent loads and bids.',
+      'cargoQuickActionsHint':
+          'Post a new load or review your recent loads and bids.',
       'postFirstLoadHint': 'Post your first load to get bids from drivers.',
       'recentLoads': 'Recent loads',
       'suggestedDrivers': 'Suggested drivers',
-      'suggestedDriversHint': 'We will recommend top drivers based on your routes.',
+      'suggestedDriversHint':
+          'We will recommend top drivers based on your routes.',
       'tapFeedToInvite': 'Tap feed to invite for bids',
       'activeJobs': 'Active jobs',
       'suggestedLoads': 'Suggested loads',
@@ -201,7 +203,8 @@ class AppLocalizations {
       'weight': 'Weight',
       'unit': 'Unit',
       'loadType': 'Load Type',
-      'startLocation': 'Start Location',
+      'departure': 'Departure',
+      'startLocation': 'Departure',
       'destination': 'Destination',
       'startLocationHint': 'City, region, or area',
       'destinationHint': 'City, region, or area',
@@ -224,7 +227,8 @@ class AppLocalizations {
       'callShipper': 'Call Shipper',
       'markDelivered': 'Mark Delivered',
       'reportIssue': 'Report Issue',
-      'cannotCompleteDeliveryMissingBid': 'Cannot complete delivery: missing accepted bid reference.',
+      'cannotCompleteDeliveryMissingBid':
+          'Cannot complete delivery: missing accepted bid reference.',
       'failedCompleteDelivery': 'Failed to complete delivery: ',
       'issueReported': 'Issue reported. Support can now review this load.',
       'failedReportIssue': 'Failed to report issue: ',
@@ -246,7 +250,8 @@ class AppLocalizations {
       'receiverName': 'Receiver name',
       'deliveryNotes': 'Delivery notes',
       'photoUrlOptional': 'Photo URL (optional)',
-      'receiverAndNotesRequired': 'Receiver name and delivery notes are required.',
+      'receiverAndNotesRequired':
+          'Receiver name and delivery notes are required.',
       'completeDelivery': 'Complete Delivery',
       'reportShipmentIssue': 'Report Shipment Issue',
       'issueCategory': 'Issue category',
@@ -298,8 +303,8 @@ class AppLocalizations {
       'loadPostFailed': 'Failed to post load: ',
       'loadIndex': 'Load',
       'bidsCount': 'bids',
-      'pickup': 'Pickup',
-      'delivery': 'Delivery',
+      'pickup': 'Departure',
+      'delivery': 'Destination',
       'back': 'Back',
       'failedToLoadBids': 'Failed to load bids: ',
       'failedToSendMessage': 'Failed to send message: ',
@@ -335,15 +340,14 @@ class AppLocalizations {
       'Dec': 'Dec',
       'tourQuickTitle': 'Quick tour',
       'tourQuickSubtitle':
-          'A guided walkthrough of the places you will use most in your first sessions.',
+          'A short walkthrough of the main places to open first.',
       'tourStepLabel': 'Step',
       'tourSkip': 'Skip',
       'tourBack': 'Back',
       'tourNext': 'Next',
       'tourStartExploring': 'Start exploring',
       'tourReplayTitle': 'Replay quick tour',
-      'tourReplaySubtitle':
-          'Walk through the key tabs, guided actions, and verification steps again.',
+      'tourReplaySubtitle': 'See the guided steps again any time.',
       'tourOpenHome': 'Open home',
       'tourOpenFeed': 'Open feed',
       'tourOpenMyBids': 'Open my bids',
@@ -351,30 +355,30 @@ class AppLocalizations {
       'tourOpenPost': 'Open post load',
       'tourCargoHomeTitle': 'Home keeps the day organized',
       'tourCargoHomeBody':
-          'Start on Home to see quick actions, recent loads, and suggested drivers without hunting through tabs.',
+          'Start on Home when you want the simplest overview of your next actions.',
       'tourCargoFeedTitle': 'Feed shows the live market',
       'tourCargoFeedBody':
-          'Browse fresh route activity in Feed when you want a wider view before posting a load.',
+          'Open Feed to browse current loads and routes before you post.',
       'tourCargoVerificationTitle': 'Verification unlocks posting',
       'tourCargoVerificationBody':
-          'Upload your national ID and track approval so posting stays smooth once you are ready to publish.',
+          'Complete verification once, then posting stays easy later.',
       'tourCargoPostTitle': 'Post loads from one clear action',
       'tourCargoPostReadyBody':
-          'Once approved, use the post action to publish a load and start collecting bids quickly.',
+          'When approval is done, use the post action to publish a load.',
       'tourCargoPostLockedBody':
-          'Your post action is ready, but verification needs approval first. Open verification now so posting is unlocked.',
+          'Posting is almost ready. Open verification first so posting unlocks.',
       'tourDriverHomeTitle': 'Home surfaces your next jobs',
       'tourDriverHomeBody':
-          'Use Home for suggested loads, active work, and shortcuts when you want the fastest overview.',
+          'Use Home for the clearest overview of loads, jobs, and shortcuts.',
       'tourDriverFeedTitle': 'Feed is where discovery happens',
       'tourDriverFeedBody':
-          'Open Feed to scan fresh loads, compare routes, and jump into the ones that fit your truck.',
+          'Open Feed to scan fresh loads and compare routes that fit your truck.',
       'tourDriverBidsTitle': 'My Bids keeps offers organized',
       'tourDriverBidsBody':
-          'Track every pending or accepted offer in one place so you can follow up without digging back through the feed.',
+          'Use My Bids to see your offers in one place without searching again.',
       'tourDriverVerificationTitle': 'Verification unlocks bidding',
       'tourDriverVerificationBody':
-          'Upload your national ID and driver\'s license to unlock bidding and keep your profile ready for approval.',
+          'Complete verification once so bidding is available when you need it.',
 
       // ...add more as needed
     },
@@ -512,7 +516,7 @@ class AppLocalizations {
       'Nov': 'Nov',
       'Dec': 'Dec',
       // ...add more as needed
-    }
+    },
   };
 
   String tr(String key) {

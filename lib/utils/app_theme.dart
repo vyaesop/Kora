@@ -7,29 +7,29 @@ const String themeModePreferenceKey = 'app_theme_mode';
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 class AppPalette {
-  static const Color ink = Color(0xFF0B1220);
-  static const Color inkSoft = Color(0xFF111827);
-  static const Color surface = Color(0xFFF4F5F8);
-  static const Color card = Color(0xFFFFFFFF);
-  static const Color accent = Color(0xFF38BDF8);
-  static const Color accentWarm = Color(0xFFF59E0B);
-  static const Color accentGreen = Color(0xFF22C55E);
-  static const Color darkSurface = Color(0xFF08111F);
-  static const Color darkSurfaceRaised = Color(0xFF101B2D);
-  static const Color darkCard = Color(0xFF142033);
-  static const Color darkCardSoft = Color(0xFF19263A);
-  static const Color darkOutline = Color(0xFF243247);
-  static const Color darkText = Color(0xFFE5EEF8);
-  static const Color darkTextSoft = Color(0xFF94A3B8);
+  static const Color ink = Color(0xFF24333D);
+  static const Color inkSoft = Color(0xFF344854);
+  static const Color surface = Color(0xFFF3F0EA);
+  static const Color card = Color(0xFFFFFCF8);
+  static const Color accent = Color(0xFF5B8C85);
+  static const Color accentWarm = Color(0xFFC28C5A);
+  static const Color accentGreen = Color(0xFF6F9A7E);
+  static const Color darkSurface = Color(0xFF10181F);
+  static const Color darkSurfaceRaised = Color(0xFF17232D);
+  static const Color darkCard = Color(0xFF1C2A34);
+  static const Color darkCardSoft = Color(0xFF233440);
+  static const Color darkOutline = Color(0xFF344653);
+  static const Color darkText = Color(0xFFE8F0EB);
+  static const Color darkTextSoft = Color(0xFFA5B5BD);
 
   static const LinearGradient heroGradient = LinearGradient(
-    colors: [Color(0xFF0B1220), Color(0xFF0F172A), Color(0xFF1E293B)],
+    colors: [Color(0xFF4A6A6B), Color(0xFF657B6D), Color(0xFF967357)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient heroGradientDark = LinearGradient(
-    colors: [Color(0xFF07101E), Color(0xFF0C1627), Color(0xFF152338)],
+    colors: [Color(0xFF132129), Color(0xFF20323A), Color(0xFF4B4335)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -68,8 +68,11 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        fillColor: const Color(0xFFF8F4EC),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -86,26 +89,32 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppPalette.ink,
+          backgroundColor: AppPalette.accent,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppPalette.inkSoft,
-          side: BorderSide(color: Colors.grey.shade300),
+          side: BorderSide(color: Colors.grey.shade400),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           foregroundColor: AppPalette.inkSoft,
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         ),
@@ -113,14 +122,17 @@ class AppTheme {
       chipTheme: ChipThemeData(
         side: BorderSide.none,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: const Color(0xFFE2E8F0),
-        selectedColor: const Color(0xFFDBEAFE),
-        labelStyle: GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w600),
+        backgroundColor: const Color(0xFFE9E4DA),
+        selectedColor: const Color(0xFFDCE6E1),
+        labelStyle: GoogleFonts.manrope(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       dividerTheme: DividerThemeData(color: Colors.grey.shade200),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: Colors.white,
-        selectedItemColor: AppPalette.ink,
+        selectedItemColor: AppPalette.accent,
         unselectedItemColor: Colors.grey.shade500,
         selectedLabelStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         unselectedLabelStyle: GoogleFonts.manrope(fontWeight: FontWeight.w500),
@@ -129,7 +141,7 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppPalette.ink,
+        backgroundColor: AppPalette.inkSoft,
         contentTextStyle: GoogleFonts.manrope(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -198,7 +210,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppPalette.darkSurfaceRaised,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -211,30 +226,38 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: AppPalette.accent, width: 1.4),
         ),
-        hintStyle: textTheme.bodyMedium?.copyWith(color: AppPalette.darkTextSoft),
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: AppPalette.darkTextSoft,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppPalette.accent,
-          foregroundColor: AppPalette.ink,
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppPalette.darkText,
+          foregroundColor: Colors.white,
           side: const BorderSide(color: AppPalette.darkOutline),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           foregroundColor: AppPalette.darkText,
           textStyle: GoogleFonts.manrope(fontWeight: FontWeight.w600),
         ),

@@ -245,8 +245,8 @@ class _CommentScreenState extends State<CommentScreen> {
     final owner = thread['owner'] as Map<String, dynamic>? ?? const {};
     final ownerId = (thread['ownerId'] ?? '').toString();
     final isShipper = _currentUserId != null && _currentUserId == ownerId;
-    final deliveryStatus =
-        (thread['deliveryStatus'] ?? 'pending_bids').toString();
+    final deliveryStatus = (thread['deliveryStatus'] ?? 'pending_bids')
+        .toString();
     final isBiddingClosed = deliveryStatus != 'pending_bids';
     final statusColor = _statusColor(deliveryStatus);
 
@@ -262,11 +262,13 @@ class _CommentScreenState extends State<CommentScreen> {
     final acceptedDriverId = (acceptedBid?['driverId'] ?? '').toString();
     final acceptedBidId = (acceptedBid?['id'] ?? '').toString();
     final acceptedNote = _parseBidNote(acceptedBid?['note']);
-    final finalPrice = (acceptedNote['finalPrice'] as num?)?.toDouble() ??
+    final finalPrice =
+        (acceptedNote['finalPrice'] as num?)?.toDouble() ??
         ((acceptedBid?['amount'] as num?)?.toDouble() ?? 0);
     final currency = (acceptedNote['currency'] ?? _defaultCurrency).toString();
-    final bestBid =
-        _bids.isEmpty ? null : (_bids.first['amount'] as num?)?.toDouble();
+    final bestBid = _bids.isEmpty
+        ? null
+        : (_bids.first['amount'] as num?)?.toDouble();
     final isAcceptedDriver =
         _currentUserId != null && _currentUserId == acceptedDriverId;
 
@@ -360,7 +362,9 @@ class _CommentScreenState extends State<CommentScreen> {
                         ),
                         _DetailMetricCard(
                           label: localizations.tr('packaging'),
-                          value: packaging.isEmpty ? 'Not specified' : packaging,
+                          value: packaging.isEmpty
+                              ? 'Not specified'
+                              : packaging,
                           icon: Icons.inventory_2_outlined,
                         ),
                         _DetailMetricCard(
@@ -412,7 +416,9 @@ class _CommentScreenState extends State<CommentScreen> {
                   color: isDark ? AppPalette.darkCard : Colors.white,
                   border: Border(
                     top: BorderSide(
-                      color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+                      color: isDark
+                          ? AppPalette.darkOutline
+                          : Colors.grey.shade200,
                     ),
                   ),
                 ),
@@ -428,7 +434,9 @@ class _CommentScreenState extends State<CommentScreen> {
                   color: isDark ? AppPalette.darkCard : Colors.white,
                   border: Border(
                     top: BorderSide(
-                      color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+                      color: isDark
+                          ? AppPalette.darkOutline
+                          : Colors.grey.shade200,
                     ),
                   ),
                 ),
@@ -512,23 +520,25 @@ class _LoadHeroCard extends StatelessWidget {
                     Text(
                       shipperName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Load owner',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                          ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.white70),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withAlpha((0.18 * 255).round()),
                   borderRadius: BorderRadius.circular(16),
@@ -548,23 +558,25 @@ class _LoadHeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Text(
-            loadDescription.isEmpty ? 'Shipment ready for bidding.' : loadDescription,
+            loadDescription.isEmpty
+                ? 'Shipment ready for bidding.'
+                : loadDescription,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 14),
-          _RoutePoint(label: 'Pickup', value: start, isStart: true),
+          _RoutePoint(label: 'Departure', value: start, isStart: true),
           const SizedBox(height: 10),
-          _RoutePoint(label: 'Delivery', value: end, isStart: false),
+          _RoutePoint(label: 'Destination', value: end, isStart: false),
           if (lastUpdated != null) ...[
             const SizedBox(height: 14),
             Text(
               lastUpdated!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.white70),
             ),
           ],
         ],
@@ -606,25 +618,25 @@ class _RoutePoint extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: Colors.white70),
               ),
               const SizedBox(height: 2),
               Text(
                 value.city,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               if (value.subtitle.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
                   value.subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white70),
                 ),
               ],
             ],
@@ -639,10 +651,7 @@ class _SectionTitle extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _SectionTitle({
-    required this.title,
-    required this.subtitle,
-  });
+  const _SectionTitle({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -653,16 +662,16 @@ class _SectionTitle extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: isDark ? AppPalette.darkText : AppPalette.ink,
-              ),
+            fontWeight: FontWeight.w700,
+            color: isDark ? AppPalette.darkText : AppPalette.ink,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-              ),
+            color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+          ),
         ),
       ],
     );
@@ -700,17 +709,17 @@ class _DetailMetricCard extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                ),
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -749,47 +758,52 @@ class _RouteCard extends StatelessWidget {
               Icon(Icons.alt_route_rounded, color: Colors.blue.shade700),
               const SizedBox(width: 8),
               Text(
-                'Route details',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                'Route',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
           const SizedBox(height: 14),
           _RouteRow(
             icon: Icons.trip_origin,
-            label: 'Pickup',
+            label: 'Departure',
             value: start,
-            color: const Color(0xFF0EA5E9),
+            color: const Color(0xFF5B8C85),
           ),
           const SizedBox(height: 12),
-          Divider(color: isDark ? AppPalette.darkOutline : Colors.grey.shade200),
+          Divider(
+            color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+          ),
           const SizedBox(height: 12),
           _RouteRow(
             icon: Icons.place_outlined,
-            label: 'Delivery',
+            label: 'Destination',
             value: end,
-            color: const Color(0xFFF59E0B),
+            color: const Color(0xFFC28C5A),
           ),
           if (message.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            Divider(color: isDark ? AppPalette.darkOutline : Colors.grey.shade200),
+            Divider(
+              color: isDark ? AppPalette.darkOutline : Colors.grey.shade200,
+            ),
             const SizedBox(height: 12),
             Text(
               'Shipment notes',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color:
-                        isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
-                    height: 1.45,
-                  ),
+                color: isDark
+                    ? AppPalette.darkTextSoft
+                    : const Color(0xFF475569),
+                height: 1.45,
+              ),
             ),
           ],
         ],
@@ -834,25 +848,25 @@ class _RouteRow extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                    ),
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 value.city,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               if (value.subtitle.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(
                   value.subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark
-                            ? AppPalette.darkTextSoft
-                            : const Color(0xFF475569),
-                      ),
+                    color: isDark
+                        ? AppPalette.darkTextSoft
+                        : const Color(0xFF475569),
+                  ),
                 ),
               ],
             ],
@@ -884,8 +898,8 @@ class _EmptyBidsCard extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-            ),
+          color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+        ),
       ),
     );
   }
@@ -951,7 +965,8 @@ class _BidCard extends StatelessWidget {
     final currency = (note['currency'] ?? defaultCurrency).toString();
     final canAccept =
         isShipper && !isBiddingClosed && status.toLowerCase() == 'pending';
-    final canDelete = !isShipper &&
+    final canDelete =
+        !isShipper &&
         bidDriverId == currentUserId &&
         status.toLowerCase() == 'pending';
     final badgeColor = _statusColor(status);
@@ -982,22 +997,26 @@ class _BidCard extends StatelessWidget {
                     Text(
                       driverName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     if (driverRating != null)
                       Text(
                         '${localizations.tr('ratingLabel')}: ${driverRating.toStringAsFixed(1)}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                            ),
+                          color: isDark
+                              ? AppPalette.darkTextSoft
+                              : Colors.black54,
+                        ),
                       ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: badgeColor.withAlpha((0.12 * 255).round()),
                   borderRadius: BorderRadius.circular(14),
@@ -1018,10 +1037,14 @@ class _BidCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
+              color: isDark
+                  ? AppPalette.darkSurfaceRaised
+                  : const Color(0xFFF8FAFC),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? AppPalette.darkOutline
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             child: Column(
@@ -1030,27 +1053,27 @@ class _BidCard extends StatelessWidget {
                 Text(
                   'Offer',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                      ),
+                    color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   formatPrice(amount, currency),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? AppPalette.darkText : AppPalette.ink,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppPalette.darkText : AppPalette.ink,
+                  ),
                 ),
                 if (carrierNotes.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
                     carrierNotes,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isDark
-                              ? AppPalette.darkTextSoft
-                              : const Color(0xFF475569),
-                          height: 1.45,
-                        ),
+                      color: isDark
+                          ? AppPalette.darkTextSoft
+                          : const Color(0xFF475569),
+                      height: 1.45,
+                    ),
                   ),
                 ],
               ],

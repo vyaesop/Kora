@@ -42,7 +42,14 @@ class _PostScreenState extends State<PostScreen> {
     'Heavy Machinery',
     'Livestock',
   ];
-  final _units = const ['kg', 'ton', 'quintal', '20ft container', '40ft container', 'litre'];
+  final _units = const [
+    'kg',
+    'ton',
+    'quintal',
+    '20ft container',
+    '40ft container',
+    'litre',
+  ];
 
   @override
   void dispose() {
@@ -63,7 +70,7 @@ class _PostScreenState extends State<PostScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) => _CityPickerSheet(
-        title: isStart ? 'Choose pickup city' : 'Choose delivery city',
+        title: isStart ? 'Choose departure city' : 'Choose destination city',
         selected: isStart ? _startLocation : _endLocation,
       ),
     );
@@ -88,9 +95,9 @@ class _PostScreenState extends State<PostScreen> {
       expectedUserType: 'Cargo',
       actionLabel: 'post loads',
       onOpenProfile: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ProfileScreen()),
-        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
       },
     );
     if (!allowed || !mounted) return;
@@ -109,7 +116,7 @@ class _PostScreenState extends State<PostScreen> {
     if (_startLocation == null || _endLocation == null) {
       NotificationHelper.showSnackBar(
         context,
-        'Choose both pickup and delivery cities from the list.',
+        'Choose both departure and destination cities from the list.',
         color: Colors.red,
       );
       return;
@@ -173,9 +180,7 @@ class _PostScreenState extends State<PostScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.tr('postLoad')),
-      ),
+      appBar: AppBar(title: Text(localizations.tr('postLoad'))),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -239,13 +244,16 @@ class _PostScreenState extends State<PostScreen> {
                     Expanded(
                       child: TextFormField(
                         controller: _weightController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         decoration: InputDecoration(
                           labelText: localizations.tr('weight'),
                           prefixIcon: const Icon(Icons.scale_outlined),
                         ),
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty) return 'Required';
+                          if (value == null || value.trim().isEmpty)
+                            return 'Required';
                           final parsed = double.tryParse(value.trim());
                           if (parsed == null || parsed <= 0) return 'Invalid';
                           return null;
@@ -261,10 +269,13 @@ class _PostScreenState extends State<PostScreen> {
                           prefixIcon: const Icon(Icons.straighten_outlined),
                         ),
                         items: _units
-                            .map((u) => DropdownMenuItem(value: u, child: Text(u)))
+                            .map(
+                              (u) => DropdownMenuItem(value: u, child: Text(u)),
+                            )
                             .toList(),
                         onChanged: (value) {
-                          if (value != null) setState(() => _weightUnit = value);
+                          if (value != null)
+                            setState(() => _weightUnit = value);
                         },
                       ),
                     ),
@@ -287,7 +298,7 @@ class _PostScreenState extends State<PostScreen> {
                 const SizedBox(height: 16),
                 _CityField(
                   controller: _startController,
-                  label: localizations.tr('startLocation'),
+                  label: localizations.tr('departure'),
                   icon: Icons.trip_origin,
                   helperText: _startLocation == null
                       ? 'Choose from major Ethiopian cities.'
@@ -309,10 +320,14 @@ class _PostScreenState extends State<PostScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
+                      color: isDark
+                          ? AppPalette.darkSurfaceRaised
+                          : const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                        color: isDark
+                            ? AppPalette.darkOutline
+                            : const Color(0xFFE2E8F0),
                       ),
                     ),
                     child: Column(
@@ -326,22 +341,24 @@ class _PostScreenState extends State<PostScreen> {
                         ),
                         const SizedBox(height: 10),
                         _RoutePreviewRow(
-                          label: 'Pickup',
+                          label: 'Departure',
                           value: _startLocation!.city,
                           subtitle: _startLocation!.subtitle,
-                          color: const Color(0xFF0EA5E9),
+                          color: const Color(0xFF5B8C85),
                         ),
                         const SizedBox(height: 12),
                         Divider(
-                          color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                          color: isDark
+                              ? AppPalette.darkOutline
+                              : const Color(0xFFE2E8F0),
                           height: 1,
                         ),
                         const SizedBox(height: 12),
                         _RoutePreviewRow(
-                          label: 'Delivery',
+                          label: 'Destination',
                           value: _endLocation!.city,
                           subtitle: _endLocation!.subtitle,
-                          color: const Color(0xFFF59E0B),
+                          color: const Color(0xFFC28C5A),
                         ),
                       ],
                     ),
@@ -372,7 +389,10 @@ class _PostScreenState extends State<PostScreen> {
                         )
                       : Text(
                           localizations.tr('postLoad'),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                 ),
               ],
@@ -447,7 +467,11 @@ class _RoutePreviewRow extends StatelessWidget {
             color: color.withAlpha((0.14 * 255).round()),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(label == 'Pickup' ? Icons.trip_origin : Icons.place_outlined, color: color, size: 18),
+          child: Icon(
+            label == 'Departure' ? Icons.trip_origin : Icons.place_outlined,
+            color: color,
+            size: 18,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -463,15 +487,17 @@ class _RoutePreviewRow extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 value,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 2),
               Text(
                 subtitle,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
+                  color: isDark
+                      ? AppPalette.darkTextSoft
+                      : const Color(0xFF475569),
                 ),
               ),
             ],
@@ -486,10 +512,7 @@ class _CityPickerSheet extends StatefulWidget {
   final String title;
   final EthiopiaCityOption? selected;
 
-  const _CityPickerSheet({
-    required this.title,
-    required this.selected,
-  });
+  const _CityPickerSheet({required this.title, required this.selected});
 
   @override
   State<_CityPickerSheet> createState() => _CityPickerSheetState();
@@ -506,8 +529,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
       return sorted;
     }
     return sorted.where((option) {
-      final haystack = '${option.city} ${option.zone} ${option.region} ${option.aliases.join(' ')}'
-          .toLowerCase();
+      final haystack =
+          '${option.city} ${option.zone} ${option.region} ${option.aliases.join(' ')}'
+              .toLowerCase();
       return haystack.contains(query);
     }).toList();
   }
@@ -537,7 +561,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                   width: 44,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: isDark ? AppPalette.darkOutline : const Color(0xFFD1D5DB),
+                    color: isDark
+                        ? AppPalette.darkOutline
+                        : const Color(0xFFD1D5DB),
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -553,7 +579,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
               Text(
                 'Search the fixed city list to keep route analytics and route details consistent.',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDark ? AppPalette.darkTextSoft : const Color(0xFF475569),
+                  color: isDark
+                      ? AppPalette.darkTextSoft
+                      : const Color(0xFF475569),
                 ),
               ),
               const SizedBox(height: 14),
@@ -570,7 +598,9 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                 child: ListView.separated(
                   itemCount: _results.length,
                   separatorBuilder: (_, __) => Divider(
-                    color: isDark ? AppPalette.darkOutline : const Color(0xFFE2E8F0),
+                    color: isDark
+                        ? AppPalette.darkOutline
+                        : const Color(0xFFE2E8F0),
                     height: 1,
                   ),
                   itemBuilder: (context, index) {
@@ -578,21 +608,28 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                     final isSelected = option.city == widget.selected?.city;
                     return ListTile(
                       onTap: () => Navigator.of(context).pop(option),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
                       leading: Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppPalette.accent.withAlpha((0.18 * 255).round())
+                              ? AppPalette.accent.withAlpha(
+                                  (0.18 * 255).round(),
+                                )
                               : (isDark
-                                  ? AppPalette.darkSurfaceRaised
-                                  : const Color(0xFFF8FAFC)),
+                                    ? AppPalette.darkSurfaceRaised
+                                    : const Color(0xFFF8FAFC)),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           Icons.location_city_rounded,
-                          color: isSelected ? AppPalette.accent : AppPalette.accentWarm,
+                          color: isSelected
+                              ? AppPalette.accent
+                              : AppPalette.accentWarm,
                           size: 20,
                         ),
                       ),
@@ -607,7 +644,10 @@ class _CityPickerSheetState extends State<_CityPickerSheet> {
                         child: Text(option.subtitle),
                       ),
                       trailing: isSelected
-                          ? const Icon(Icons.check_circle_rounded, color: AppPalette.accent)
+                          ? const Icon(
+                              Icons.check_circle_rounded,
+                              color: AppPalette.accent,
+                            )
                           : null,
                     );
                   },

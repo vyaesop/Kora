@@ -49,12 +49,11 @@ class _HomeState extends State<Home> {
 
   int get _postTabIndex => currentUser?.userType == 'Cargo' ? 2 : -1;
 
-  int get _profileTabIndex =>
-      currentUser?.userType == 'Cargo'
-          ? 4
-          : currentUser?.userType == 'Driver'
-              ? 3
-          : 3;
+  int get _profileTabIndex => currentUser?.userType == 'Cargo'
+      ? 4
+      : currentUser?.userType == 'Driver'
+      ? 3
+      : 3;
 
   @override
   void initState() {
@@ -85,9 +84,9 @@ class _HomeState extends State<Home> {
       await _showTour(currentUser!);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to load user: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to load user: $e")));
     } finally {
       if (mounted) {
         setState(() {
@@ -140,9 +139,7 @@ class _HomeState extends State<Home> {
         const FeedScreen(),
         const SizedBox(),
         const TrackLoadsScreen(showBack: false),
-        ProfileScreen(
-          onReplayTour: () => _showTour(user, force: true),
-        ),
+        ProfileScreen(onReplayTour: () => _showTour(user, force: true)),
       ];
     }
     if (user?.userType == 'Driver') {
@@ -156,9 +153,7 @@ class _HomeState extends State<Home> {
         ),
         const FeedScreen(showSearchField: false),
         const MyBidsScreen(),
-        ProfileScreen(
-          onReplayTour: () => _showTour(user, force: true),
-        ),
+        ProfileScreen(onReplayTour: () => _showTour(user, force: true)),
       ];
     }
     return [
@@ -173,14 +168,18 @@ class _HomeState extends State<Home> {
     if (currentUser?.userType == 'Cargo') {
       return [
         BottomNavigationBarItem(
-            icon: const Icon(Icons.home), label: localizations.tr('home')),
+          icon: const Icon(Icons.home),
+          label: localizations.tr('home'),
+        ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+          icon: const Icon(Icons.rss_feed),
+          label: localizations.tr('feed'),
+        ),
         BottomNavigationBarItem(
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.blue.shade600,
+              color: AppPalette.accent,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.add, color: Colors.white, size: 24),
@@ -188,34 +187,52 @@ class _HomeState extends State<Home> {
           label: localizations.tr('post'),
         ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.inventory_2_outlined),
-            label: localizations.tr('myLoads')),
+          icon: const Icon(Icons.inventory_2_outlined),
+          label: localizations.tr('myLoads'),
+        ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.person), label: localizations.tr('profile')),
+          icon: const Icon(Icons.person),
+          label: localizations.tr('profile'),
+        ),
       ];
     }
     if (currentUser?.userType == 'Driver') {
       return [
         BottomNavigationBarItem(
-            icon: const Icon(Icons.home), label: localizations.tr('home')),
+          icon: const Icon(Icons.home),
+          label: localizations.tr('home'),
+        ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+          icon: const Icon(Icons.rss_feed),
+          label: localizations.tr('feed'),
+        ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.local_offer),
-            label: localizations.tr('myBids')),
+          icon: const Icon(Icons.local_offer),
+          label: localizations.tr('myBids'),
+        ),
         BottomNavigationBarItem(
-            icon: const Icon(Icons.person), label: localizations.tr('profile')),
+          icon: const Icon(Icons.person),
+          label: localizations.tr('profile'),
+        ),
       ];
     }
     return [
       BottomNavigationBarItem(
-          icon: const Icon(Icons.home), label: localizations.tr('home')),
+        icon: const Icon(Icons.home),
+        label: localizations.tr('home'),
+      ),
       BottomNavigationBarItem(
-          icon: const Icon(Icons.rss_feed), label: localizations.tr('feed')),
+        icon: const Icon(Icons.rss_feed),
+        label: localizations.tr('feed'),
+      ),
       BottomNavigationBarItem(
-          icon: const Icon(Icons.search), label: localizations.tr('search')),
+        icon: const Icon(Icons.search),
+        label: localizations.tr('search'),
+      ),
       BottomNavigationBarItem(
-          icon: const Icon(Icons.person), label: localizations.tr('profile')),
+        icon: const Icon(Icons.person),
+        label: localizations.tr('profile'),
+      ),
     ];
   }
 
@@ -233,9 +250,7 @@ class _HomeState extends State<Home> {
 
   Future<void> _openVerificationFlow() async {
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => const VerificationDocumentsScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const VerificationDocumentsScreen()),
     );
     if (changed == true) {
       await _refreshCurrentUser();
@@ -287,9 +302,7 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     final localizations = AppLocalizations.of(context);
     if (isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final pages = _buildPages();
     final navItems = _buildNavItems(localizations);
@@ -318,7 +331,6 @@ class _HomeState extends State<Home> {
       // ✅ No more extendBody needed since panel is gone
     );
   }
-
 }
 
 class _TourSheet extends StatefulWidget {
@@ -362,14 +374,15 @@ class _TourSheetState extends State<_TourSheet> {
 
   List<_TourStepData> _steps(AppLocalizations localizations) {
     if (widget.user.userType == 'Cargo') {
-      final postingUnlocked =
-          VerificationAccess.isApproved(widget.user.verificationStatus);
+      final postingUnlocked = VerificationAccess.isApproved(
+        widget.user.verificationStatus,
+      );
       return [
         _TourStepData(
           title: localizations.tr('tourCargoHomeTitle'),
           body: localizations.tr('tourCargoHomeBody'),
           icon: Icons.home_outlined,
-          accent: const Color(0xFF0EA5E9),
+          accent: const Color(0xFF5B8C85),
           actionLabel: localizations.tr('tourOpenHome'),
           onAction: widget.onOpenHome,
         ),
@@ -377,7 +390,7 @@ class _TourSheetState extends State<_TourSheet> {
           title: localizations.tr('tourCargoFeedTitle'),
           body: localizations.tr('tourCargoFeedBody'),
           icon: Icons.rss_feed_outlined,
-          accent: const Color(0xFF2563EB),
+          accent: const Color(0xFF6B8791),
           actionLabel: localizations.tr('tourOpenFeed'),
           onAction: widget.onOpenFeed,
         ),
@@ -385,7 +398,7 @@ class _TourSheetState extends State<_TourSheet> {
           title: localizations.tr('tourCargoVerificationTitle'),
           body: localizations.tr('tourCargoVerificationBody'),
           icon: Icons.verified_user_outlined,
-          accent: const Color(0xFFF59E0B),
+          accent: const Color(0xFFC28C5A),
           actionLabel: localizations.tr('tourOpenVerification'),
           onAction: widget.onOpenVerification,
         ),
@@ -395,7 +408,7 @@ class _TourSheetState extends State<_TourSheet> {
               ? localizations.tr('tourCargoPostReadyBody')
               : localizations.tr('tourCargoPostLockedBody'),
           icon: Icons.add_circle_outline,
-          accent: const Color(0xFF16A34A),
+          accent: const Color(0xFF6F9A7E),
           actionLabel: postingUnlocked
               ? localizations.tr('tourOpenPost')
               : localizations.tr('tourOpenVerification'),
@@ -409,7 +422,7 @@ class _TourSheetState extends State<_TourSheet> {
         title: localizations.tr('tourDriverHomeTitle'),
         body: localizations.tr('tourDriverHomeBody'),
         icon: Icons.home_outlined,
-        accent: const Color(0xFF0EA5E9),
+        accent: const Color(0xFF5B8C85),
         actionLabel: localizations.tr('tourOpenHome'),
         onAction: widget.onOpenHome,
       ),
@@ -417,7 +430,7 @@ class _TourSheetState extends State<_TourSheet> {
         title: localizations.tr('tourDriverFeedTitle'),
         body: localizations.tr('tourDriverFeedBody'),
         icon: Icons.rss_feed_outlined,
-        accent: const Color(0xFF2563EB),
+        accent: const Color(0xFF6B8791),
         actionLabel: localizations.tr('tourOpenFeed'),
         onAction: widget.onOpenFeed,
       ),
@@ -425,7 +438,7 @@ class _TourSheetState extends State<_TourSheet> {
         title: localizations.tr('tourDriverBidsTitle'),
         body: localizations.tr('tourDriverBidsBody'),
         icon: Icons.local_offer_outlined,
-        accent: const Color(0xFF8B5CF6),
+        accent: const Color(0xFF8E7B67),
         actionLabel: localizations.tr('tourOpenMyBids'),
         onAction: widget.onOpenMyBids,
       ),
@@ -433,7 +446,7 @@ class _TourSheetState extends State<_TourSheet> {
         title: localizations.tr('tourDriverVerificationTitle'),
         body: localizations.tr('tourDriverVerificationBody'),
         icon: Icons.verified_user_outlined,
-        accent: const Color(0xFFF59E0B),
+        accent: const Color(0xFFC28C5A),
         actionLabel: localizations.tr('tourOpenVerification'),
         onAction: widget.onOpenVerification,
       ),
@@ -488,9 +501,8 @@ class _TourSheetState extends State<_TourSheet> {
                   Expanded(
                     child: Text(
                       localizations.tr('tourQuickTitle'),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
                   IconButton(
@@ -504,8 +516,8 @@ class _TourSheetState extends State<_TourSheet> {
               Text(
                 localizations.tr('tourQuickSubtitle'),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                    ),
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                ),
               ),
               const SizedBox(height: 18),
               ClipRRect(
@@ -523,9 +535,9 @@ class _TourSheetState extends State<_TourSheet> {
               Text(
                 '${localizations.tr('tourStepLabel')} ${_pageIndex + 1} / ${steps.length}',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: isDark ? AppPalette.darkTextSoft : Colors.black54,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 18),
               SizedBox(
@@ -554,8 +566,8 @@ class _TourSheetState extends State<_TourSheet> {
                           color: isActive
                               ? item.accent.withAlpha((0.55 * 255).round())
                               : (isDark
-                                  ? AppPalette.darkOutline
-                                  : const Color(0xFFE2E8F0)),
+                                    ? AppPalette.darkOutline
+                                    : const Color(0xFFE2E8F0)),
                         ),
                       ),
                       child: Column(
@@ -565,7 +577,9 @@ class _TourSheetState extends State<_TourSheet> {
                             width: 60,
                             height: 60,
                             decoration: BoxDecoration(
-                              color: item.accent.withAlpha((0.14 * 255).round()),
+                              color: item.accent.withAlpha(
+                                (0.14 * 255).round(),
+                              ),
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Icon(
@@ -577,14 +591,14 @@ class _TourSheetState extends State<_TourSheet> {
                           const SizedBox(height: 18),
                           Text(
                             item.title,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 10),
                           Text(
                             item.body,
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(
                                   color: isDark
                                       ? AppPalette.darkTextSoft
                                       : const Color(0xFF475569),
@@ -622,8 +636,8 @@ class _TourSheetState extends State<_TourSheet> {
                       color: index == _pageIndex
                           ? step.accent
                           : (isDark
-                              ? AppPalette.darkOutline
-                              : const Color(0xFFCBD5E1)),
+                                ? AppPalette.darkOutline
+                                : const Color(0xFFCBD5E1)),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -682,4 +696,3 @@ class _TourStepData {
     this.onAction,
   });
 }
-

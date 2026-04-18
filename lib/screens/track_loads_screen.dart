@@ -63,7 +63,9 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppLocalizations.of(context).tr('deleteLoad')),
-        content: Text(AppLocalizations.of(context).tr('deleteLoadConfirmation')),
+        content: Text(
+          AppLocalizations.of(context).tr('deleteLoadConfirmation'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -122,6 +124,7 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
       docId: (load['id'] ?? '').toString(),
       senderName: (owner['name'] ?? '').toString(),
       senderProfileImageUrl: (owner['profileImageUrl'] ?? '').toString(),
+      ownerId: (load['ownerId'] ?? owner['id'] ?? '').toString(),
       message: (load['message'] ?? '').toString(),
       timestamp: createdAt,
       likes: const [],
@@ -235,8 +238,8 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
 
           final loads = snapshot.data ?? const <Map<String, dynamic>>[];
           final activeCount = loads.where((load) {
-            final status =
-                (load['deliveryStatus'] ?? 'pending_bids').toString();
+            final status = (load['deliveryStatus'] ?? 'pending_bids')
+                .toString();
             return status != 'delivered' && status != 'cancelled';
           }).length;
           final deliveredCount = loads.length - activeCount;
@@ -299,11 +302,12 @@ class _TrackLoadsScreenState extends State<TrackLoadsScreen> {
                   )
                 else
                   ...loads.map((load) {
-                    final bidCount = (load['bids'] as List<dynamic>?)?.length ??
+                    final bidCount =
+                        (load['bids'] as List<dynamic>?)?.length ??
                         ((load['bids_count'] as num?)?.toInt() ?? 0);
                     final threadMessage = _toThreadMessage(load);
-                    final rawStatus =
-                        (load['deliveryStatus'] ?? 'pending_bids').toString();
+                    final rawStatus = (load['deliveryStatus'] ?? 'pending_bids')
+                        .toString();
                     final status = deliveryStatusLabel(rawStatus);
                     final statusColor = _statusColor(rawStatus);
                     final loadId = (load['id'] ?? '').toString();
@@ -431,7 +435,10 @@ class _LoadCard extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withAlpha((0.14 * 255).round()),
                   borderRadius: BorderRadius.circular(14),
@@ -459,7 +466,7 @@ class _LoadCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _RouteStop(
-                    label: 'Pickup',
+                    label: 'Departure',
                     value: start,
                     icon: Icons.trip_origin,
                     color: statusColor,
@@ -476,10 +483,10 @@ class _LoadCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: _RouteStop(
-                    label: 'Delivery',
+                    label: 'Destination',
                     value: end,
                     icon: Icons.location_on_outlined,
-                    color: const Color(0xFF0F172A),
+                    color: const Color(0xFFC28C5A),
                   ),
                 ),
               ],
@@ -550,9 +557,9 @@ class _RouteStop extends StatelessWidget {
               child: Text(
                 label,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.blueGrey.shade500,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: Colors.blueGrey.shade500,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -562,9 +569,9 @@ class _RouteStop extends StatelessWidget {
           value,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
       ],
     );
@@ -575,10 +582,7 @@ class _HeroStat extends StatelessWidget {
   final String label;
   final String value;
 
-  const _HeroStat({
-    required this.label,
-    required this.value,
-  });
+  const _HeroStat({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -594,15 +598,15 @@ class _HeroStat extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.white70),
           ),
         ],
       ),
@@ -626,9 +630,9 @@ class _MetaPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
       ),
     );
   }
