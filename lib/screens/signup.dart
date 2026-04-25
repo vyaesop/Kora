@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_localizations.dart';
+import '../screens/home.dart';
 import '../screens/login.dart';
 import '../screens/verification_documents_screen.dart';
 import '../widgets/language_switcher.dart';
@@ -94,13 +95,16 @@ class _SignupScreenState extends State<SignupScreen> {
       );
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const VerificationDocumentsScreen(
-              isPostSignupFlow: true,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created. Complete verification later from Profile to bid or post loads.',
             ),
           ),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const Home()),
         );
       }
     } catch (e) {

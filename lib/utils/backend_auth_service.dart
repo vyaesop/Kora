@@ -38,8 +38,6 @@ class BackendAuthService {
                   payload['email'] ??
                   '')
               .toString(),
-      followers: const [],
-      following: const [],
       profileImageUrl: payload['profileImageUrl']?.toString(),
       bio: payload['bio']?.toString(),
       link: payload['link']?.toString(),
@@ -141,7 +139,21 @@ class BackendAuthService {
           (data['user'] as Map<String, dynamic>? ?? <String, dynamic>{});
       await _saveSession(token: token, user: userMap);
       return _toUserModel(userMap);
+    } on BackendRequestException catch (error) {
+      if (error.statusCode == 401) {
+        await clearSession();
+        return null;
+      }
+      final stored = await getStoredUserMap();
+      if (stored != null && stored.isNotEmpty) {
+        return _toUserModel(stored);
+      }
+      return null;
     } catch (_) {
+      final stored = await getStoredUserMap();
+      if (stored != null && stored.isNotEmpty) {
+        return _toUserModel(stored);
+      }
       await clearSession();
       return null;
     }

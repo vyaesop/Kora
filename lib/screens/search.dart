@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 import '../app_localizations.dart';
 import '../model/thread_message.dart';
@@ -10,10 +9,10 @@ import '../utils/app_theme.dart';
 import '../utils/backend_auth_service.dart';
 import '../utils/backend_http.dart';
 import '../utils/error_handler.dart';
+import '../utils/load_categories.dart';
 import '../utils/verification_access.dart';
 import '../widgets/thread_message.dart';
 import 'comment_screen.dart';
-import 'post_comment_screen.dart';
 import 'profile_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -34,7 +33,6 @@ class _SearchScreenState extends State<SearchScreen> {
   static const int _pageSize = 12;
 
   final TextEditingController _searchController = TextEditingController();
-  final PanelController _panelController = PanelController();
   final BackendAuthService _authService = BackendAuthService();
   final ScrollController _scrollController = ScrollController();
 
@@ -43,22 +41,11 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _hasMore = true;
   String? _error;
   String? _currentUserId;
-  String? _threadDocForBid;
   DateTime? _lastUpdated;
   int _nextOffset = 0;
 
-  final List<String> _types = const [
-    'All',
-    'General',
-    'Coffee',
-    'Fuel',
-    'Food',
-    'Fertilizer',
-    'Construction Materials',
-    'Heavy Machinery',
-    'Livestock',
-  ];
-  String _selectedType = 'All';
+  String _selectedCategory = 'All';
+  String _selectedSubtype = 'All';
   bool _showClosed = false;
 
   List<ThreadMessage> _allThreads = const [];
@@ -215,36 +202,8 @@ class _SearchScreenState extends State<SearchScreen> {
     return myBidThreads;
   }
 
-  ThreadMessage _toThreadMessage(Map<String, dynamic> row) {
-    final owner = row['owner'] is Map<String, dynamic>
-        ? row['owner'] as Map<String, dynamic>
-        : const <String, dynamic>{};
-
-    return ThreadMessage(
-      id: (row['id'] ?? '').toString(),
-      docId: (row['id'] ?? '').toString(),
-      senderName: (owner['name'] ?? 'Unknown').toString(),
-      senderProfileImageUrl: (owner['profileImageUrl'] ?? '').toString(),
-      ownerId: (row['ownerId'] ?? owner['id'] ?? '').toString(),
-      message: (row['message'] ?? '').toString(),
-      timestamp:
-          DateTime.tryParse((row['createdAt'] ?? '').toString()) ??
-          DateTime.now(),
-      likes: const [],
-      comments: const [],
-      weight: (row['weight'] as num?)?.toDouble() ?? 0,
-      type: (row['type'] ?? '').toString(),
-      start: (row['start'] ?? '').toString(),
-      end: (row['end'] ?? '').toString(),
-      packaging: (row['packaging'] ?? '').toString(),
-      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
-      startLat: (row['startLat'] as num?)?.toDouble() ?? 0,
-      startLng: (row['startLng'] as num?)?.toDouble() ?? 0,
-      endLat: (row['endLat'] as num?)?.toDouble() ?? 0,
-      endLng: (row['endLng'] as num?)?.toDouble() ?? 0,
-      deliveryStatus: row['deliveryStatus']?.toString(),
-    );
-  }
+  ThreadMessage _toThreadMessage(Map<String, dynamic> row) =>
+      ThreadMessage.fromApiMap(row);
 
   List<ThreadMessage> get _filteredThreads {
     final q = _searchController.text.trim().toLowerCase();
@@ -254,26 +213,21 @@ class _SearchScreenState extends State<SearchScreen> {
           (t.deliveryStatus ?? 'pending_bids') != 'pending_bids') {
         return false;
       }
-      if (_selectedType != 'All' && t.type != _selectedType) {
+      if (!loadMatchesCategoryFilter(
+        category: t.category,
+        subtype: t.type,
+        selectedCategory: _selectedCategory,
+        selectedSubtype: _selectedSubtype,
+      )) {
         return false;
       }
       if (widget.showSearchField && q.isNotEmpty) {
-        final hay = '${t.start} ${t.end} ${t.message} ${t.type}'.toLowerCase();
+        final hay = '${t.start} ${t.end} ${t.message} ${t.category} ${t.type}'
+            .toLowerCase();
         if (!hay.contains(q)) return false;
       }
       return true;
     }).toList();
-  }
-
-  String _typeLabel(String type, AppLocalizations localizations) {
-    switch (type) {
-      case 'All':
-        return localizations.tr('searchAll');
-      case 'General':
-        return localizations.tr('searchGeneral');
-      default:
-        return type;
-    }
   }
 
   String _formatLastUpdated(DateTime time, AppLocalizations localizations) {
@@ -292,7 +246,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool get _hasActiveFilters =>
       (widget.showSearchField && _hasSearch) ||
-      _selectedType != 'All' ||
+      _selectedCategory != 'All' ||
+      _selectedSubtype != 'All' ||
       _showClosed;
 
   void _clearSearch() {
@@ -304,10 +259,18 @@ class _SearchScreenState extends State<SearchScreen> {
   void _resetFilters() {
     _searchController.clear();
     setState(() {
-      _selectedType = 'All';
+      _selectedCategory = 'All';
+      _selectedSubtype = 'All';
       _showClosed = false;
     });
     unawaited(_ensureVisibleResults());
+  }
+
+  List<String> get _subcategoryOptions {
+    if (_selectedCategory == 'All') {
+      return const <String>[];
+    }
+    return subcategoriesFor(_selectedCategory);
   }
 
   Future<void> _openBidComposer(String threadId, bool alreadyBid) async {
@@ -332,9 +295,22 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!allowed || !mounted) {
       return;
     }
-
-    setState(() => _threadDocForBid = threadId);
-    _panelController.open();
+    ThreadMessage? thread;
+    for (final item in _allThreads) {
+      if (item.id == threadId) {
+        thread = item;
+        break;
+      }
+    }
+    if (thread == null) return;
+    final selectedThread = thread;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            CommentScreen(message: selectedThread, threadId: selectedThread.id),
+      ),
+    );
   }
 
   Widget _buildFilters(AppLocalizations localizations) {
@@ -433,16 +409,23 @@ class _SearchScreenState extends State<SearchScreen> {
             height: 38,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _types.length,
+              itemCount: loadCategoryCatalog.length + 1,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final type = _types[index];
-                final selected = _selectedType == type;
+                final type = index == 0
+                    ? 'All'
+                    : loadCategoryCatalog[index - 1].category;
+                final selected = _selectedCategory == type;
                 return ChoiceChip(
-                  label: Text(_typeLabel(type, localizations)),
+                  label: Text(
+                    type == 'All' ? localizations.tr('searchAll') : type,
+                  ),
                   selected: selected,
                   onSelected: (_) {
-                    setState(() => _selectedType = type);
+                    setState(() {
+                      _selectedCategory = type;
+                      _selectedSubtype = 'All';
+                    });
                     unawaited(_ensureVisibleResults());
                   },
                   selectedColor: const Color(0xFFE0F2FE),
@@ -460,6 +443,38 @@ class _SearchScreenState extends State<SearchScreen> {
               },
             ),
           ),
+          if (_selectedCategory != 'All') ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedSubtype,
+              decoration: InputDecoration(
+                labelText: 'Specific load type',
+                prefixIcon: const Icon(Icons.expand_more_rounded),
+                filled: true,
+                fillColor: isDark
+                    ? AppPalette.darkSurfaceRaised
+                    : const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              items: [
+                const DropdownMenuItem(
+                  value: 'All',
+                  child: Text('All subtypes'),
+                ),
+                ..._subcategoryOptions.map(
+                  (item) => DropdownMenuItem(value: item, child: Text(item)),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _selectedSubtype = value);
+                unawaited(_ensureVisibleResults());
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -521,264 +536,243 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SlidingUpPanel(
-        controller: _panelController,
-        minHeight: 0,
-        maxHeight: MediaQuery.of(context).size.height * 0.6,
-        panel: _threadDocForBid == null
-            ? const SizedBox.shrink()
-            : PostCommentScreen(
-                threadDoc: _threadDocForBid!,
-                panelController: _panelController,
-              ),
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Positioned(
-                top: -120,
-                right: -80,
-                child: Container(
-                  width: 220,
-                  height: 220,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        _accent.withAlpha((0.18 * 255).round()),
-                        _accent.withAlpha((0.02 * 255).round()),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned(
+              top: -120,
+              right: -80,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      _accent.withAlpha((0.18 * 255).round()),
+                      _accent.withAlpha((0.02 * 255).round()),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
               ),
-              Positioned(
-                bottom: -140,
-                left: -60,
-                child: Container(
-                  width: 240,
-                  height: 240,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        _accentWarm.withAlpha((0.16 * 255).round()),
-                        _accentWarm.withAlpha((0.02 * 255).round()),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+            ),
+            Positioned(
+              bottom: -140,
+              left: -60,
+              child: Container(
+                width: 240,
+                height: 240,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      _accentWarm.withAlpha((0.16 * 255).round()),
+                      _accentWarm.withAlpha((0.02 * 255).round()),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
               ),
-              Positioned.fill(
-                child: Column(
-                  children: [
-                    _buildFilters(localizations),
-                    if (_lastUpdated != null)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 18,
-                          right: 18,
-                          bottom: 6,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.schedule,
-                              size: 14,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${localizations.tr('lastUpdated')}: ${_formatLastUpdated(_lastUpdated!, localizations)}',
-                              style: GoogleFonts.manrope(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+            ),
+            Positioned.fill(
+              child: Column(
+                children: [
+                  _buildFilters(localizations),
+                  if (_lastUpdated != null)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: 18,
+                        right: 18,
+                        bottom: 6,
                       ),
-                    Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 320),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        child: _loading
-                            ? const Center(
-                                key: ValueKey('loading'),
-                                child: CircularProgressIndicator(),
-                              )
-                            : _error != null
-                            ? Center(
-                                key: const ValueKey('error'),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.error_outline,
-                                        size: 34,
-                                        color: Colors.red.shade300,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${localizations.tr('lastUpdated')}: ${_formatLastUpdated(_lastUpdated!, localizations)}',
+                            style: GoogleFonts.manrope(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 320),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: _loading
+                          ? const Center(
+                              key: ValueKey('loading'),
+                              child: CircularProgressIndicator(),
+                            )
+                          : _error != null
+                          ? Center(
+                              key: const ValueKey('error'),
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.error_outline,
+                                      size: 34,
+                                      color: Colors.red.shade300,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Text(
+                                      _error!,
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.manrope(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade700,
                                       ),
-                                      const SizedBox(height: 10),
-                                      Text(
-                                        _error!,
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.manrope(
-                                          fontSize: 14,
-                                          color: Colors.grey.shade700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      ElevatedButton.icon(
-                                        onPressed: () =>
-                                            _refresh(showLoader: true),
-                                        icon: const Icon(Icons.refresh),
-                                        label: Text(
-                                          localizations.tr('refresh'),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: () =>
+                                          _refresh(showLoader: true),
+                                      icon: const Icon(Icons.refresh),
+                                      label: Text(localizations.tr('refresh')),
+                                    ),
+                                  ],
                                 ),
-                              )
-                            : threads.isEmpty
-                            ? RefreshIndicator(
-                                onRefresh: () => _refresh(showLoader: false),
-                                child: SingleChildScrollView(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  child: SizedBox(
-                                    height:
-                                        MediaQuery.of(context).size.height *
-                                        0.48,
-                                    child: Center(
-                                      key: const ValueKey('empty'),
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.inventory_2_outlined,
-                                            size: 64,
-                                            color: Colors.grey.shade300,
+                              ),
+                            )
+                          : threads.isEmpty
+                          ? RefreshIndicator(
+                              onRefresh: () => _refresh(showLoader: false),
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: SizedBox(
+                                  height:
+                                      MediaQuery.of(context).size.height * 0.48,
+                                  child: Center(
+                                    key: const ValueKey('empty'),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.inventory_2_outlined,
+                                          size: 64,
+                                          color: Colors.grey.shade300,
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          localizations.tr('noLoadsAvailable'),
+                                          style: GoogleFonts.manrope(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.grey.shade600,
                                           ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          _hasMore
+                                              ? 'Loading more loads for your filters...'
+                                              : _hasActiveFilters
+                                              ? 'Try adjusting your filters'
+                                              : 'Check back later for new loads',
+                                          style: GoogleFonts.manrope(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                        if (_hasActiveFilters && !_hasMore) ...[
                                           const SizedBox(height: 16),
-                                          Text(
-                                            localizations.tr(
-                                              'noLoadsAvailable',
+                                          OutlinedButton.icon(
+                                            onPressed: _resetFilters,
+                                            icon: const Icon(
+                                              Icons.filter_alt_off,
                                             ),
-                                            style: GoogleFonts.manrope(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            _hasMore
-                                                ? 'Loading more loads for your filters...'
-                                                : _hasActiveFilters
-                                                ? 'Try adjusting your filters'
-                                                : 'Check back later for new loads',
-                                            style: GoogleFonts.manrope(
-                                              fontSize: 14,
-                                              color: Colors.grey.shade500,
+                                            label: Text(
+                                              localizations.tr('viewAll'),
                                             ),
                                           ),
-                                          if (_hasActiveFilters &&
-                                              !_hasMore) ...[
-                                            const SizedBox(height: 16),
-                                            OutlinedButton.icon(
-                                              onPressed: _resetFilters,
-                                              icon: const Icon(
-                                                Icons.filter_alt_off,
-                                              ),
-                                              label: Text(
-                                                localizations.tr('viewAll'),
-                                              ),
-                                            ),
-                                          ],
                                         ],
-                                      ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              )
-                            : RefreshIndicator(
-                                key: const ValueKey('list'),
-                                onRefresh: () => _refresh(showLoader: false),
-                                child: ListView.separated(
-                                  controller: _scrollController,
-                                  padding: EdgeInsets.fromLTRB(
-                                    16,
-                                    4,
-                                    16,
-                                    bottomSpacing,
-                                  ),
-                                  itemCount:
-                                      threads.length + (_loadingMore ? 1 : 0),
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 12),
-                                  itemBuilder: (context, index) {
-                                    if (index >= threads.length) {
-                                      return const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          vertical: 8,
-                                        ),
-                                        child: Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                      );
-                                    }
-
-                                    final thread = threads[index];
-                                    final alreadyBid = _myBidThreadIds.contains(
-                                      thread.docId,
-                                    );
-
-                                    return GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => CommentScreen(
-                                              message: thread,
-                                              threadId: thread.docId,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: ThreadMessageWidget(
-                                        message: thread,
-                                        onLike: () {},
-                                        onDisLike: () {},
-                                        onComment: () {
-                                          _openBidComposer(
-                                            thread.docId,
-                                            alreadyBid,
-                                          );
-                                        },
-                                        onProfileTap: null,
-                                        panelController: _panelController,
-                                        userId: _currentUserId ?? '',
-                                        showBidButton: !alreadyBid,
+                              ),
+                            )
+                          : RefreshIndicator(
+                              key: const ValueKey('list'),
+                              onRefresh: () => _refresh(showLoader: false),
+                              child: ListView.separated(
+                                controller: _scrollController,
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  bottomSpacing,
+                                ),
+                                itemCount:
+                                    threads.length + (_loadingMore ? 1 : 0),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  if (index >= threads.length) {
+                                    return const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
                                       ),
                                     );
-                                  },
-                                ),
+                                  }
+
+                                  final thread = threads[index];
+                                  final alreadyBid = _myBidThreadIds.contains(
+                                    thread.id,
+                                  );
+
+                                  return GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CommentScreen(
+                                            message: thread,
+                                            threadId: thread.id,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    child: ThreadMessageWidget(
+                                      message: thread,
+                                      onLike: () {},
+                                      onDisLike: () {},
+                                      onComment: () {
+                                        _openBidComposer(thread.id, alreadyBid);
+                                      },
+                                      onProfileTap: null,
+                                      panelController: null,
+                                      userId: _currentUserId ?? '',
+                                      showBidButton: !alreadyBid,
+                                    ),
+                                  );
+                                },
                               ),
-                      ),
+                            ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

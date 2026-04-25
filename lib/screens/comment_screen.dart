@@ -7,15 +7,20 @@ import 'package:kora/model/thread_message.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_http.dart';
+import 'package:kora/utils/backend_transport.dart';
+import 'package:kora/utils/driver_location_service.dart';
 import 'package:kora/utils/ethiopia_locations.dart';
 import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/firestore_service.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/load_categories.dart';
+import 'package:kora/utils/recommendation_service.dart';
 import 'package:kora/widgets/active_job_controls.dart';
 import 'package:kora/widgets/agreed_price_banner.dart';
 import 'package:kora/widgets/driver_status_controls.dart';
 import 'package:kora/widgets/place_bid_widget.dart';
 import 'package:kora/widgets/profile_avatar.dart';
+import 'package:kora/screens/wallet_screen.dart';
 
 class CommentScreen extends StatefulWidget {
   final String threadId;
@@ -40,8 +45,11 @@ class _CommentScreenState extends State<CommentScreen> {
   String? _currentUserId;
   Map<String, dynamic>? _thread;
   List<Map<String, dynamic>> _bids = const [];
+  List<ThreadMessage> _returnSuggestions = const [];
   Timer? _pollTimer;
   DateTime? _lastUpdated;
+  String? _suggestionOrigin;
+  bool _usingLiveDriverCity = false;
 
   @override
   void initState() {
@@ -57,12 +65,21 @@ class _CommentScreenState extends State<CommentScreen> {
 
   Future<void> _bootstrap() async {
     final userId = await _authService.getCurrentUserId();
+    unawaited(
+      RecommendationService.rememberRoute(
+        widget.message.start,
+        widget.message.end,
+      ),
+    );
     if (!mounted) return;
     setState(() => _currentUserId = userId);
     await _refresh(showLoader: true);
   }
 
-  Future<void> _refresh({required bool showLoader}) async {
+  Future<void> _refresh({
+    required bool showLoader,
+    bool forceRefresh = false,
+  }) async {
     if (showLoader && mounted) {
       setState(() {
         _loading = true;
@@ -71,14 +88,17 @@ class _CommentScreenState extends State<CommentScreen> {
     }
 
     try {
+      final recentTokens = await RecommendationService.loadRecentRouteTokens();
       final responses = await Future.wait([
         BackendHttp.request(
           path: '/api/threads/${widget.threadId}',
-          forceRefresh: true,
+          cacheTtl: const Duration(minutes: 5),
+          forceRefresh: forceRefresh,
         ),
         BackendHttp.request(
           path: '/api/threads/${widget.threadId}/bids',
-          forceRefresh: true,
+          cacheTtl: const Duration(minutes: 2),
+          forceRefresh: forceRefresh,
         ),
       ]);
       final threadData = responses[0];
@@ -96,13 +116,49 @@ class _CommentScreenState extends State<CommentScreen> {
         return aAmount.compareTo(bAmount);
       });
 
+      final currentEnd = _threadTextFromMap(thread, 'end', widget.message.end);
+      final currentStart = _threadTextFromMap(
+        thread,
+        'start',
+        widget.message.start,
+      );
+      final ownerId = (thread?['ownerId'] ?? '').toString();
+      final isShipper = _currentUserId != null && _currentUserId == ownerId;
+      final suggestionOriginData = isShipper
+          ? _SuggestionOrigin(city: currentEnd, isLiveDriverCity: false)
+          : await _resolveSuggestionOrigin(fallbackCity: currentEnd);
+      final suggestionsRows = await _loadClientSideSuggestions(
+        returnOrigin: suggestionOriginData.city,
+        excludeThreadId: widget.threadId,
+        forceRefresh: forceRefresh,
+      );
+      final suggestions = suggestionsRows.map(ThreadMessage.fromApiMap).toList()
+        ..sort((a, b) {
+          final scoreA = RecommendationService.scoreReturnLoad(
+            thread: a,
+            returnOrigin: suggestionOriginData.city,
+            originalStart: currentStart,
+            recentTokens: recentTokens,
+          );
+          final scoreB = RecommendationService.scoreReturnLoad(
+            thread: b,
+            returnOrigin: suggestionOriginData.city,
+            originalStart: currentStart,
+            recentTokens: recentTokens,
+          );
+          return scoreB.compareTo(scoreA);
+        });
+
       if (!mounted) return;
       setState(() {
         _thread = thread;
         _bids = bids;
+        _returnSuggestions = suggestions.take(4).toList();
         _loading = false;
         _error = null;
         _lastUpdated = DateTime.now();
+        _suggestionOrigin = suggestionOriginData.city;
+        _usingLiveDriverCity = suggestionOriginData.isLiveDriverCity;
       });
     } catch (e) {
       if (!mounted) return;
@@ -111,6 +167,45 @@ class _CommentScreenState extends State<CommentScreen> {
         _error = ErrorHandler.getMessage(e);
       });
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadClientSideSuggestions({
+    required String returnOrigin,
+    required String excludeThreadId,
+    required bool forceRefresh,
+  }) async {
+    try {
+      final feed = await BackendHttp.request(
+        path: '/api/threads?limit=40&offset=0',
+        auth: false,
+        cacheTtl: const Duration(minutes: 5),
+        forceRefresh: forceRefresh,
+      );
+      final rows = (feed['threads'] as List<dynamic>? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .where((row) {
+            final id = (row['id'] ?? '').toString();
+            if (id.isEmpty || id == excludeThreadId) return false;
+            final status = (row['deliveryStatus'] ?? 'pending_bids').toString();
+            if (status != 'pending_bids') return false;
+            final start = (row['start'] ?? '').toString().trim().toLowerCase();
+            return start == returnOrigin.trim().toLowerCase();
+          })
+          .toList();
+      return rows;
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<_SuggestionOrigin> _resolveSuggestionOrigin({
+    required String fallbackCity,
+  }) async {
+    final driverCity = await DriverLocationService.getCurrentDriverCity();
+    if (driverCity != null && driverCity.trim().isNotEmpty) {
+      return _SuggestionOrigin(city: driverCity.trim(), isLiveDriverCity: true);
+    }
+    return _SuggestionOrigin(city: fallbackCity, isLiveDriverCity: false);
   }
 
   Map<String, dynamic> _parseBidNote(dynamic note) {
@@ -149,7 +244,47 @@ class _CommentScreenState extends State<CommentScreen> {
           content: Text(AppLocalizations.of(context).tr('bidAcceptedSuccess')),
         ),
       );
-      await _refresh(showLoader: false);
+      await _refresh(showLoader: false, forceRefresh: true);
+    } on BackendRequestException catch (error) {
+      if (!mounted) return;
+      final code = (error.payload?['code'] ?? '').toString();
+      if (code == 'WALLET_TOPUP_REQUIRED') {
+        final wallet = error.payload?['wallet'] as Map<String, dynamic>?;
+        final available = (wallet?['availableBalance'] ?? 0).toString();
+        final required = (wallet?['requiredAmount'] ?? 0).toString();
+        final openWallet = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Wallet top-up required'),
+            content: Text(
+              'You need enough wallet balance before accepting this bid.\n\nAvailable: $available ETB\nRequired: $required ETB',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Not now'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Open wallet'),
+              ),
+            ],
+          ),
+        );
+        if (openWallet == true && mounted) {
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const WalletScreen()));
+        }
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context).tr('error')}: ${ErrorHandler.getMessage(error)}',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -172,7 +307,7 @@ class _CommentScreenState extends State<CommentScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context).tr('bidDeleted'))),
       );
-      await _refresh(showLoader: false);
+      await _refresh(showLoader: false, forceRefresh: true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -187,6 +322,15 @@ class _CommentScreenState extends State<CommentScreen> {
 
   String _threadText(String key, String fallback) {
     final value = _thread?[key]?.toString().trim();
+    return value == null || value.isEmpty ? fallback : value;
+  }
+
+  String _threadTextFromMap(
+    Map<String, dynamic>? source,
+    String key,
+    String fallback,
+  ) {
+    final value = source?[key]?.toString().trim();
     return value == null || value.isEmpty ? fallback : value;
   }
 
@@ -287,7 +431,10 @@ class _CommentScreenState extends State<CommentScreen> {
       fallback: end,
     );
     final loadDescription = _threadText('message', widget.message.message);
-    final loadType = _threadText('type', widget.message.type);
+    final loadType = displayLoadType(
+      category: _threadText('category', widget.message.category),
+      subtype: _threadText('type', widget.message.type),
+    );
     final packaging = _threadText('packaging', widget.message.packaging);
     final shipperName = (owner['name'] ?? widget.message.senderName).toString();
     final shipperImage = owner['profileImageUrl']?.toString();
@@ -301,169 +448,194 @@ class _CommentScreenState extends State<CommentScreen> {
         title: Text('${startLocation.city} -> ${endLocation.city}'),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            if (isBiddingClosed && acceptedBid != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: AgreedPriceBanner(
-                  finalPrice: finalPrice,
-                  currency: currency,
-                ),
+        child: RefreshIndicator(
+          onRefresh: () => _refresh(showLoader: false, forceRefresh: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              if (isBiddingClosed && acceptedBid != null) ...[
+                AgreedPriceBanner(finalPrice: finalPrice, currency: currency),
+                const SizedBox(height: 14),
+              ],
+              _LoadHeroCard(
+                shipperName: shipperName,
+                shipperImageUrl: shipperImage,
+                loadDescription: loadDescription,
+                start: startLocation,
+                end: endLocation,
+                statusLabel: deliveryStatus.replaceAll('_', ' '),
+                statusColor: statusColor,
+                lastUpdated: _lastUpdated == null
+                    ? null
+                    : '${localizations.tr('lastUpdated')}: ${_formatLastUpdated(_lastUpdated!, localizations)}',
               ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () => _refresh(showLoader: false),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  children: [
-                    _LoadHeroCard(
-                      shipperName: shipperName,
-                      shipperImageUrl: shipperImage,
-                      loadDescription: loadDescription,
-                      start: startLocation,
-                      end: endLocation,
-                      statusLabel: deliveryStatus.replaceAll('_', ' '),
-                      statusColor: statusColor,
-                      lastUpdated: _lastUpdated == null
-                          ? null
-                          : '${localizations.tr('lastUpdated')}: ${_formatLastUpdated(_lastUpdated!, localizations)}',
-                    ),
-                    const SizedBox(height: 16),
-                    const _SectionTitle(
-                      title: 'Shipment overview',
-                      subtitle:
-                          'A concise summary of the route and cargo details.',
-                    ),
-                    const SizedBox(height: 10),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1.35,
-                      children: [
-                        _DetailMetricCard(
-                          label: localizations.tr('weight'),
-                          value: formatWeight(
-                            _threadWeight(),
-                            _threadWeightUnit(),
-                          ),
-                          icon: Icons.scale_outlined,
-                        ),
-                        _DetailMetricCard(
-                          label: localizations.tr('loadType'),
-                          value: loadType.isEmpty
-                              ? localizations.tr('searchGeneral')
-                              : loadType,
-                          icon: Icons.category_outlined,
-                        ),
-                        _DetailMetricCard(
-                          label: localizations.tr('packaging'),
-                          value: packaging.isEmpty
-                              ? 'Not specified'
-                              : packaging,
-                          icon: Icons.inventory_2_outlined,
-                        ),
-                        _DetailMetricCard(
-                          label: localizations.tr('bids'),
-                          value: '${_bids.length}',
-                          icon: Icons.local_offer_outlined,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _RouteCard(
-                      start: startLocation,
-                      end: endLocation,
-                      message: loadDescription,
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionTitle(
-                      title: 'Bid activity',
-                      subtitle: _bids.isEmpty
-                          ? 'No bids yet on this load.'
-                          : '${_bids.length} bids received${bestBid == null ? '' : ' - Best offer ${formatPrice(bestBid, currency)}'}',
-                    ),
-                    const SizedBox(height: 10),
-                    if (_bids.isEmpty)
-                      _EmptyBidsCard(text: localizations.tr('noBidsYet'))
-                    else
-                      ..._bids.map(
-                        (bid) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _BidCard(
-                            bid: bid,
-                            localizations: localizations,
-                            currentUserId: _currentUserId ?? '',
-                            defaultCurrency: _defaultCurrency,
-                            isShipper: isShipper,
-                            isBiddingClosed: isBiddingClosed,
-                            onAccept: () => _acceptBid(bid),
-                            onDelete: () => _deleteBid(bid),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+              const SizedBox(height: 16),
+              const _SectionTitle(
+                title: 'Shipment overview',
+                subtitle: 'A concise summary of the route and cargo details.',
               ),
-            ),
-            if (!isShipper && !isBiddingClosed)
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? AppPalette.darkCard : Colors.white,
-                  border: Border(
-                    top: BorderSide(
-                      color: isDark
-                          ? AppPalette.darkOutline
-                          : Colors.grey.shade200,
-                    ),
+              const SizedBox(height: 10),
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.35,
+                children: [
+                  _DetailMetricCard(
+                    label: localizations.tr('weight'),
+                    value: formatWeight(_threadWeight(), _threadWeightUnit()),
+                    icon: Icons.scale_outlined,
                   ),
+                  _DetailMetricCard(
+                    label: localizations.tr('loadType'),
+                    value: loadType.isEmpty
+                        ? localizations.tr('searchGeneral')
+                        : loadType,
+                    icon: Icons.category_outlined,
+                  ),
+                  _DetailMetricCard(
+                    label: localizations.tr('packaging'),
+                    value: packaging.isEmpty ? 'Not specified' : packaging,
+                    icon: Icons.inventory_2_outlined,
+                  ),
+                  _DetailMetricCard(
+                    label: localizations.tr('bids'),
+                    value: '${_bids.length}',
+                    icon: Icons.local_offer_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _RouteCard(
+                start: startLocation,
+                end: endLocation,
+                message: loadDescription,
+              ),
+              if (!isShipper && !isBiddingClosed) ...[
+                const SizedBox(height: 18),
+                _SectionTitle(
+                  title: 'Place your bid',
+                  subtitle:
+                      'Review the shipment, then send a clear offer before looking at other nearby opportunities.',
                 ),
-                child: PlaceBidWidget(
+                const SizedBox(height: 10),
+                PlaceBidWidget(
                   threadId: widget.threadId,
                   currency: currency,
+                  onBidSaved: () =>
+                      _refresh(showLoader: false, forceRefresh: true),
                 ),
-              ),
-            if (isBiddingClosed && acceptedBid != null)
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: isDark ? AppPalette.darkCard : Colors.white,
-                  border: Border(
-                    top: BorderSide(
+              ],
+              if (!isShipper) ...[
+                const SizedBox(height: 18),
+                _SectionTitle(
+                  title:
+                      'Suggested loads from ${_suggestionOrigin ?? endLocation.city}',
+                  subtitle: _usingLiveDriverCity
+                      ? 'These loads start from the city you are currently in, based on your live location permission.'
+                      : 'Enable driver location to keep these suggestions aligned to the city you are currently in. Until then, we fall back to the route destination.',
+                ),
+                const SizedBox(height: 10),
+                if (_returnSuggestions.isEmpty)
+                  _EmptyBidsCard(
+                    text: _usingLiveDriverCity
+                        ? 'No open loads start from your current city right now. As new matching loads appear, they will show here automatically.'
+                        : 'No open loads match the current fallback city yet. Turn on location and refresh to get suggestions from where you are now.',
+                  )
+                else
+                  ..._returnSuggestions.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _ReturnLoadSuggestionCard(
+                        message: item,
+                        onOpen: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CommentScreen(
+                                threadId: item.id,
+                                message: item,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+              if (isBiddingClosed && acceptedBid != null) ...[
+                const SizedBox(height: 18),
+                const _SectionTitle(
+                  title: 'Active delivery controls',
+                  subtitle:
+                      'Manage delivery progress, proof, and closeout actions from the main thread.',
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppPalette.darkCard : Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
                       color: isDark
                           ? AppPalette.darkOutline
-                          : Colors.grey.shade200,
+                          : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      ActiveJobControls(
+                        isShipper: isShipper,
+                        threadId: widget.threadId,
+                        carrierId: acceptedDriverId,
+                        deliveryStatus: deliveryStatus,
+                        bidId: acceptedBidId,
+                        driverId: acceptedDriverId,
+                        ownerId: ownerId,
+                      ),
+                      if (isAcceptedDriver)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          child: DriverStatusControls(
+                            threadId: widget.threadId,
+                            currentStatus: deliveryStatus,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              _SectionTitle(
+                title: 'Bid activity',
+                subtitle: _bids.isEmpty
+                    ? 'No bids yet on this load.'
+                    : '${_bids.length} bids received${bestBid == null ? '' : ' - Best offer ${formatPrice(bestBid, currency)}'}',
+              ),
+              const SizedBox(height: 10),
+              if (_bids.isEmpty)
+                _EmptyBidsCard(text: localizations.tr('noBidsYet'))
+              else
+                ..._bids.map(
+                  (bid) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _BidCard(
+                      bid: bid,
+                      localizations: localizations,
+                      currentUserId: _currentUserId ?? '',
+                      defaultCurrency: _defaultCurrency,
+                      isShipper: isShipper,
+                      isBiddingClosed: isBiddingClosed,
+                      onAccept: () => _acceptBid(bid),
+                      onDelete: () => _deleteBid(bid),
                     ),
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                child: Column(
-                  children: [
-                    ActiveJobControls(
-                      isShipper: isShipper,
-                      threadId: widget.threadId,
-                      carrierId: acceptedDriverId,
-                      deliveryStatus: deliveryStatus,
-                      bidId: acceptedBidId,
-                      driverId: acceptedDriverId,
-                      ownerId: ownerId,
-                    ),
-                    if (isAcceptedDriver)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                        child: DriverStatusControls(
-                          threadId: widget.threadId,
-                          currentStatus: deliveryStatus,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -496,7 +668,11 @@ class _LoadHeroCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: AppPalette.heroGradient,
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0B1324), Color(0xFF1D3557), Color(0xFF214E6B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
@@ -567,9 +743,29 @@ class _LoadHeroCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          _RoutePoint(label: 'Departure', value: start, isStart: true),
-          const SizedBox(height: 10),
-          _RoutePoint(label: 'Destination', value: end, isStart: false),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha((0.1 * 255).round()),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withAlpha((0.14 * 255).round()),
+              ),
+            ),
+            child: Column(
+              children: [
+                _RoutePoint(label: 'Departure', value: start, isStart: true),
+                const SizedBox(height: 10),
+                Divider(
+                  color: Colors.white.withAlpha((0.12 * 255).round()),
+                  height: 1,
+                ),
+                const SizedBox(height: 10),
+                _RoutePoint(label: 'Destination', value: end, isStart: false),
+              ],
+            ),
+          ),
           if (lastUpdated != null) ...[
             const SizedBox(height: 14),
             Text(
@@ -905,6 +1101,117 @@ class _EmptyBidsCard extends StatelessWidget {
   }
 }
 
+class _ReturnLoadSuggestionCard extends StatelessWidget {
+  final ThreadMessage message;
+  final VoidCallback onOpen;
+
+  const _ReturnLoadSuggestionCard({
+    required this.message,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppPalette.darkCard : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${message.start} -> ${message.end}',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    message.message.trim().isEmpty
+                        ? message.type.isEmpty && message.category.isEmpty
+                              ? 'Open return opportunity'
+                              : displayLoadType(
+                                  category: message.category,
+                                  subtype: message.type,
+                                )
+                        : message.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: isDark
+                          ? AppPalette.darkTextSoft
+                          : const Color(0xFF475569),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _SuggestionTag(
+                        label: formatWeight(message.weight, message.weightUnit),
+                      ),
+                      if (message.type.isNotEmpty ||
+                          message.category.isNotEmpty)
+                        _SuggestionTag(
+                          label: displayLoadType(
+                            category: message.category,
+                            subtype: message.type,
+                          ),
+                        ),
+                      if (message.packaging.isNotEmpty)
+                        _SuggestionTag(label: message.packaging),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            ElevatedButton(onPressed: onOpen, child: const Text('Open')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SuggestionTag extends StatelessWidget {
+  final String label;
+
+  const _SuggestionTag({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
 class _BidCard extends StatelessWidget {
   final Map<String, dynamic> bid;
   final AppLocalizations localizations;
@@ -1102,4 +1409,11 @@ class _BidCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SuggestionOrigin {
+  final String city;
+  final bool isLiveDriverCity;
+
+  const _SuggestionOrigin({required this.city, required this.isLiveDriverCity});
 }

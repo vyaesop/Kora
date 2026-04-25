@@ -29,8 +29,6 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
       id: (user['id'] ?? '').toString(),
       name: (user['name'] ?? '').toString(),
       username: (user['username'] ?? user['email'] ?? '').toString(),
-      followers: const [],
-      following: const [],
       profileImageUrl: user['profileImageUrl']?.toString(),
       bio: user['bio']?.toString(),
       link: user['link']?.toString(),
@@ -52,36 +50,7 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
     );
     final threads = (data['threads'] as List<dynamic>? ?? const [])
         .whereType<Map<String, dynamic>>()
-        .map((messageData) {
-          final timestampRaw = messageData['createdAt']?.toString();
-          final timestamp = timestampRaw == null
-              ? DateTime.now()
-              : DateTime.tryParse(timestampRaw) ?? DateTime.now();
-          return ThreadMessage(
-            id: (messageData['id'] ?? '').toString(),
-            docId: (messageData['id'] ?? '').toString(),
-            senderName: user.name,
-            senderProfileImageUrl:
-                user.profileImageUrl ??
-                'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRz8cLf8-P2P8GZ0-KiQ-OXpZQ4bebpa3K3Dw&usqp=CAU',
-            ownerId: (messageData['ownerId'] ?? user.id).toString(),
-            message: (messageData['message'] ?? '').toString(),
-            timestamp: timestamp,
-            likes: const [],
-            comments: const [],
-            weight: (messageData['weight'] as num?)?.toDouble() ?? 0.0,
-            type: (messageData['type'] ?? '').toString(),
-            start: (messageData['start'] ?? '').toString(),
-            end: (messageData['end'] ?? '').toString(),
-            packaging: (messageData['packaging'] ?? '').toString(),
-            weightUnit: (messageData['weightUnit'] ?? '').toString(),
-            startLat: (messageData['startLat'] as num?)?.toDouble() ?? 0.0,
-            startLng: (messageData['startLng'] as num?)?.toDouble() ?? 0.0,
-            endLat: (messageData['endLat'] as num?)?.toDouble() ?? 0.0,
-            endLng: (messageData['endLng'] as num?)?.toDouble() ?? 0.0,
-            deliveryStatus: messageData['deliveryStatus']?.toString(),
-          );
-        })
+        .map(ThreadMessage.fromApiMap)
         .toList();
 
     return threads;
@@ -181,7 +150,7 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                                               builder: (context) =>
                                                   CommentScreen(
                                                     message: message,
-                                                    threadId: message.docId,
+                                                    threadId: message.id,
                                                   ),
                                             ),
                                           );
@@ -199,7 +168,7 @@ class _PostOwnerProfileScreenState extends State<PostOwnerProfileScreen> {
                                                 builder: (context) =>
                                                     CommentScreen(
                                                       message: message,
-                                                      threadId: message.docId,
+                                                      threadId: message.id,
                                                     ),
                                               ),
                                             );

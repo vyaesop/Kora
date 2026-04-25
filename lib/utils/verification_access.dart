@@ -115,7 +115,7 @@ class VerificationAccess {
     final normalized = normalizeStatus(status);
     switch (normalized) {
       case 'approved':
-        return 'Your documents are approved. You can post loads or place bids normally.';
+        return 'Your documents are approved and locked. You can post loads or place bids normally. Contact support if changes are needed.';
       case 'submitted':
         return 'Your verification has been sent to the admin team. You can keep browsing while approval is pending.';
       case 'rejected':

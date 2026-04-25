@@ -40,6 +40,8 @@ class _VerificationDocumentsScreenState
   bool _loading = true;
   bool _saving = false;
 
+  bool get _isApproved => _verificationStatus == 'approved';
+
   @override
   void initState() {
     super.initState();
@@ -168,6 +170,13 @@ class _VerificationDocumentsScreenState
   }
 
   Future<void> _save({required bool submitForReview}) async {
+    if (_isApproved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Approved verification cannot be modified. Contact support if changes are needed.')),
+      );
+      return;
+    }
+
     final userId = _userId;
     if (userId == null || userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,6 +350,7 @@ class _VerificationDocumentsScreenState
                             child: TextField(
                               controller: _tinNumberController,
                               keyboardType: TextInputType.number,
+                              readOnly: _isApproved,
                               decoration: InputDecoration(
                                 labelText: item.label,
                                 prefixIcon: const Icon(Icons.pin_outlined),
@@ -368,6 +378,7 @@ class _VerificationDocumentsScreenState
                           padding: const EdgeInsets.only(bottom: 12),
                           child: TextField(
                             controller: _libreController,
+                            readOnly: _isApproved,
                             decoration: const InputDecoration(
                               labelText: 'Libre',
                               prefixIcon: Icon(Icons.description_outlined),
@@ -380,6 +391,7 @@ class _VerificationDocumentsScreenState
                         TextField(
                           controller: _vehiclePlateController,
                           textCapitalization: TextCapitalization.characters,
+                          readOnly: _isApproved,
                           decoration: const InputDecoration(
                             labelText: 'Vehicle plate number',
                             prefixIcon: Icon(Icons.local_shipping_outlined),
@@ -403,7 +415,7 @@ class _VerificationDocumentsScreenState
                     title: item.label,
                     subtitle: _photoSubtitle(item.key, _userType),
                     imageSource: _photoForKey(item.key),
-                    onPick: () => _pickPhoto(item.key),
+                    onPick: _isApproved ? null : () => _pickPhoto(item.key),
                   ),
                 ),
               ),
@@ -447,7 +459,7 @@ class _VerificationDocumentsScreenState
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _saving
+                  onPressed: _saving || _isApproved
                       ? null
                       : () => _save(submitForReview: true),
                   child: _saving
@@ -467,7 +479,7 @@ class _VerificationDocumentsScreenState
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _saving
+                  onPressed: _saving || _isApproved
                       ? null
                       : () => _save(submitForReview: false),
                   child: Text(
@@ -616,7 +628,7 @@ class _DocumentCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String? imageSource;
-  final VoidCallback onPick;
+  final VoidCallback? onPick;
 
   const _DocumentCard({
     required this.title,

@@ -53,7 +53,11 @@ model User {
   followerList            Follows[]            @relation("Following")
   followingList           Follows[]            @relation("Follower")
   passwordResetTokens     PasswordResetToken[]
+  notifications           AppNotification[]
+  paymentOrders           PaymentOrder[]
   threads                 Thread[]             @relation("ThreadOwner")
+  wallet                  Wallet?
+  walletTransactions      WalletTransaction[]
 }
 
 model Follows {
@@ -70,6 +74,7 @@ model Thread {
   ownerId        String
   message        String
   weight         Float?
+  category       String?
   type           String?
   start          String?
   end            String?
@@ -93,6 +98,7 @@ model Thread {
   comments       Comment[]
   disputes       Dispute[]
   owner          User          @relation("ThreadOwner", fields: [ownerId], references: [id])
+  paymentOrders   PaymentOrder[]
 }
 
 model Bid {
@@ -108,6 +114,7 @@ model Bid {
   completedAt DateTime?
   driver      User      @relation("BidDriver", fields: [driverId], references: [id])
   load        Thread    @relation(fields: [loadId], references: [id])
+  paymentOrders PaymentOrder[]
 }
 
 model Comment {
@@ -208,4 +215,99 @@ model PhoneOtp {
   createdAt   DateTime  @default(now())
 
   @@index([phoneNumber, expiresAt])
+}
+
+model Wallet {
+  id              String              @id @default(uuid())
+  userId          String              @unique
+  currency        String              @default("ETB")
+  balance         Float               @default(0)
+  reservedBalance Float               @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User                @relation(fields: [userId], references: [id])
+  paymentOrders   PaymentOrder[]
+  transactions    WalletTransaction[]
+
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id            String   @id @default(uuid())
+  walletId      String
+  userId        String
+  kind          String
+  direction     String
+  status        String   @default("completed")
+  amount        Float
+  currency      String   @default("ETB")
+  title         String
+  description   String?
+  referenceType String?
+  referenceId   String?
+  provider      String?
+  providerRef   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  wallet        Wallet   @relation(fields: [walletId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@index([walletId, createdAt])
+  @@index([userId, createdAt])
+  @@index([referenceType, referenceId])
+}
+
+model PaymentOrder {
+  id              String   @id @default(uuid())
+  userId          String
+  walletId        String?
+  threadId        String?
+  bidId           String?
+  type            String
+  status          String   @default("pending")
+  provider        String
+  amount          Float
+  currency        String   @default("ETB")
+  merchOrderId    String?  @unique
+  providerOrderId String?
+  prepayId        String?
+  checkoutUrl     String?
+  rawRequest      String?
+  metadata        Json?
+  providerPayload Json?
+  failureReason   String?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+  wallet          Wallet?  @relation(fields: [walletId], references: [id])
+  thread          Thread?  @relation(fields: [threadId], references: [id])
+  bid             Bid?     @relation(fields: [bidId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([threadId, createdAt])
+  @@index([bidId, createdAt])
+  @@index([status, createdAt])
+}
+
+model AppNotification {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String
+  title       String
+  body        String
+  entityType  String?
+  entityId    String?
+  route       String?
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
 }

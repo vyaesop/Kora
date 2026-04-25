@@ -1,13 +1,9 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/screens/track_driver_map_screen.dart';
 import 'package:kora/screens/shipment_chat_screen.dart';
-import 'package:kora/utils/backend_auth_service.dart';
-import 'package:kora/utils/backend_config.dart';
+import 'package:kora/utils/backend_http.dart';
 import 'package:kora/app_localizations.dart';
 import 'package:kora/utils/delivery_status.dart';
 
@@ -16,36 +12,12 @@ Future<Map<String, dynamic>> _authedRequest({
   String method = 'GET',
   Map<String, dynamic>? body,
 }) async {
-  final token = await BackendAuthService().getToken();
-  if (token == null || token.isEmpty) {
-    throw Exception('Not signed in');
-  }
-
-  final uri = Uri.parse('${BackendConfig.baseUrl}$path');
-  final client = HttpClient();
-  try {
-    final req = await client.openUrl(method, uri);
-    req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-    req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-
-    if (body != null) {
-      req.add(utf8.encode(jsonEncode(body)));
-    }
-
-    final res = await req.close();
-    final raw = await utf8.decoder.bind(res).join();
-    final data = raw.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(raw) as Map<String, dynamic>;
-
-    if (res.statusCode < 200 || res.statusCode >= 300 || data['ok'] == false) {
-      throw Exception((data['error'] ?? 'Request failed').toString());
-    }
-
-    return data;
-  } finally {
-    client.close(force: true);
-  }
+  return BackendHttp.request(
+    path: path,
+    method: method,
+    body: body,
+    forceRefresh: method.toUpperCase() != 'GET',
+  );
 }
 
 class ActiveJobControls extends StatelessWidget {
@@ -124,7 +96,9 @@ class ActiveJobControls extends StatelessWidget {
                     Text(
                       'Current stage: ${deliveryStatusLabel(deliveryStatus)}',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+                        color: isDark
+                            ? AppPalette.darkTextSoft
+                            : Colors.black54,
                       ),
                     ),
                   ],
@@ -141,16 +115,18 @@ class ActiveJobControls extends StatelessWidget {
               final status = entry.value;
               final isActive = index <= currentStageIndex;
               return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isActive
                       ? (isDark
-                          ? AppPalette.accent.withAlpha((0.18 * 255).round())
-                          : Colors.blue.shade100)
+                            ? AppPalette.accent.withAlpha((0.18 * 255).round())
+                            : Colors.blue.shade100)
                       : (isDark
-                          ? AppPalette.darkSurfaceRaised
-                          : Colors.white.withAlpha((0.74 * 255).round())),
+                            ? AppPalette.darkSurfaceRaised
+                            : Colors.white.withAlpha((0.74 * 255).round())),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
@@ -160,8 +136,8 @@ class ActiveJobControls extends StatelessWidget {
                     color: isActive
                         ? (isDark ? AppPalette.darkText : Colors.blue.shade900)
                         : (isDark
-                            ? AppPalette.darkTextSoft
-                            : Colors.blueGrey.shade600),
+                              ? AppPalette.darkTextSoft
+                              : Colors.blueGrey.shade600),
                   ),
                 ),
               );
@@ -222,9 +198,11 @@ class ActiveJobControls extends StatelessWidget {
                   _launchCall(context, isShipper ? driverId : ownerId);
                 },
                 icon: const Icon(Icons.call),
-                label: Text(isShipper
-                    ? localizations.tr('callDriver')
-                    : localizations.tr('callShipper')),
+                label: Text(
+                  isShipper
+                      ? localizations.tr('callDriver')
+                      : localizations.tr('callShipper'),
+                ),
               ),
               if (isShipper)
                 ElevatedButton.icon(
@@ -250,21 +228,23 @@ class ActiveJobControls extends StatelessWidget {
                 color: isDark ? AppPalette.darkSurfaceRaised : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color:
-                      isDark ? AppPalette.darkOutline : const Color(0xFFFDE68A),
+                  color: isDark
+                      ? AppPalette.darkOutline
+                      : const Color(0xFFFDE68A),
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.star_outline,
-                      color: Colors.amber.shade700, size: 22),
+                  Icon(
+                    Icons.star_outline,
+                    color: Colors.amber.shade700,
+                    size: 22,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Delivery complete. Leave a driver rating to close the loop.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.4,
-                      ),
+                      style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
                     ),
                   ),
                   TextButton(
@@ -312,8 +292,8 @@ class ActiveJobControls extends StatelessWidget {
       final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                Text(localizations.tr('cannotCompleteDeliveryMissingBid'))),
+          content: Text(localizations.tr('cannotCompleteDeliveryMissingBid')),
+        ),
       );
       return;
     }
@@ -339,15 +319,16 @@ class ActiveJobControls extends StatelessWidget {
       if (!context.mounted) return;
       showDialog(
         context: context,
-        builder: (ctx) => RatingDialog(driverId: driverId, bidId: bidId, ownerId: ownerId),
+        builder: (ctx) =>
+            RatingDialog(driverId: driverId, bidId: bidId, ownerId: ownerId),
       );
     } catch (e) {
       if (!context.mounted) return;
       final localizations = AppLocalizations.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                '${localizations.tr('failedCompleteDelivery')}$e')),
+          content: Text('${localizations.tr('failedCompleteDelivery')}$e'),
+        ),
       );
     }
   }
@@ -408,8 +389,7 @@ class ActiveJobControls extends StatelessWidget {
     final proceed = await _confirmAction(
       context,
       title: localizations.tr('confirmMessageTitle'),
-      body:
-          '${localizations.tr('confirmMessageBody')} $phone',
+      body: '${localizations.tr('confirmMessageBody')} $phone',
     );
     if (!context.mounted) return;
     if (!proceed) return;
@@ -438,8 +418,7 @@ class ActiveJobControls extends StatelessWidget {
     final proceed = await _confirmAction(
       context,
       title: localizations.tr('confirmCallTitle'),
-      body:
-          '${localizations.tr('confirmCallBody')} $phone',
+      body: '${localizations.tr('confirmCallBody')} $phone',
     );
     if (!context.mounted) return;
     if (!proceed) return;
@@ -660,7 +639,9 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
             final notes = _notesController.text.trim();
             if (receiver.isEmpty || notes.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(localizations.tr('receiverAndNotesRequired'))),
+                SnackBar(
+                  content: Text(localizations.tr('receiverAndNotesRequired')),
+                ),
               );
               return;
             }
@@ -668,7 +649,9 @@ class _DeliveryProofDialogState extends State<_DeliveryProofDialog> {
               _ProofData(
                 receiverName: receiver,
                 deliveryNotes: notes,
-                photoUrl: _photoController.text.trim().isEmpty ? null : _photoController.text.trim(),
+                photoUrl: _photoController.text.trim().isEmpty
+                    ? null
+                    : _photoController.text.trim(),
               ),
             );
           },
@@ -717,11 +700,26 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
               labelText: localizations.tr('issueCategory'),
             ),
             items: [
-              DropdownMenuItem(value: 'Delay', child: Text(localizations.tr('delay'))),
-              DropdownMenuItem(value: 'Damaged goods', child: Text(localizations.tr('damagedGoods'))),
-              DropdownMenuItem(value: 'Communication', child: Text(localizations.tr('communicationIssue'))),
-              DropdownMenuItem(value: 'Payment', child: Text(localizations.tr('paymentIssue'))),
-              DropdownMenuItem(value: 'Other', child: Text(localizations.tr('otherIssue'))),
+              DropdownMenuItem(
+                value: 'Delay',
+                child: Text(localizations.tr('delay')),
+              ),
+              DropdownMenuItem(
+                value: 'Damaged goods',
+                child: Text(localizations.tr('damagedGoods')),
+              ),
+              DropdownMenuItem(
+                value: 'Communication',
+                child: Text(localizations.tr('communicationIssue')),
+              ),
+              DropdownMenuItem(
+                value: 'Payment',
+                child: Text(localizations.tr('paymentIssue')),
+              ),
+              DropdownMenuItem(
+                value: 'Other',
+                child: Text(localizations.tr('otherIssue')),
+              ),
             ],
             onChanged: (value) {
               if (value != null) setState(() => _category = value);
@@ -741,18 +739,23 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(localizations.tr('cancel'))),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(localizations.tr('cancel')),
+        ),
         ElevatedButton(
           onPressed: () {
             final details = _detailsController.text.trim();
             if (details.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(localizations.tr('pleaseAddIssueDetails'))),
+                SnackBar(
+                  content: Text(localizations.tr('pleaseAddIssueDetails')),
+                ),
               );
               return;
             }
-            Navigator.of(context).pop(_IssueData(category: _category, details: details));
+            Navigator.of(
+              context,
+            ).pop(_IssueData(category: _category, details: details));
           },
           child: Text(localizations.tr('submit')),
         ),

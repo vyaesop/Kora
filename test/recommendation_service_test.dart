@@ -9,15 +9,13 @@ ThreadMessage _thread({
 }) {
   return ThreadMessage(
     id: 'id',
-    docId: 'doc',
     senderName: 'sender',
     senderProfileImageUrl: '',
     ownerId: 'owner',
     message: 'msg',
     timestamp: DateTime.now(),
-    likes: const [],
-    comments: const [],
     weight: weight,
+    category: 'Retail',
     type: 'Food',
     start: start,
     end: end,
@@ -56,6 +54,51 @@ void main() {
         driverMaxWeightKg: 8000,
       );
       expect(score, lessThan(0));
+    });
+  });
+
+  group('RecommendationService.scoreReturnLoad', () {
+    test('strongly prefers loads that start from the destination city', () {
+      final thread = _thread(
+        start: 'Adama, Oromia',
+        end: 'Dire Dawa, Dire Dawa',
+        weight: 4000,
+      );
+      final score = RecommendationService.scoreReturnLoad(
+        thread: thread,
+        returnOrigin: 'Adama, Oromia',
+        originalStart: 'Addis Ababa, Addis Ababa',
+        recentTokens: const ['Dire Dawa'],
+      );
+      expect(score, greaterThanOrEqualTo(70));
+    });
+
+    test('rewards routes that head back toward the original start', () {
+      final directReturn = _thread(
+        start: 'Adama, Oromia',
+        end: 'Addis Ababa, Addis Ababa',
+        weight: 5000,
+      );
+      final unrelated = _thread(
+        start: 'Adama, Oromia',
+        end: 'Bahir Dar, Amhara',
+        weight: 5000,
+      );
+
+      final directScore = RecommendationService.scoreReturnLoad(
+        thread: directReturn,
+        returnOrigin: 'Adama, Oromia',
+        originalStart: 'Addis Ababa, Addis Ababa',
+        recentTokens: const [],
+      );
+      final unrelatedScore = RecommendationService.scoreReturnLoad(
+        thread: unrelated,
+        returnOrigin: 'Adama, Oromia',
+        originalStart: 'Addis Ababa, Addis Ababa',
+        recentTokens: const [],
+      );
+
+      expect(directScore, greaterThan(unrelatedScore));
     });
   });
 }

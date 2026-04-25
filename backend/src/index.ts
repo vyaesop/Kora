@@ -9,6 +9,11 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import { resolveEthiopiaLocation } from './ethiopiaLocations';
+import {
+  createTelebirrWebCheckout,
+  hasTelebirrConfig,
+  type TelebirrConfig,
+} from './telebirr';
 
 dotenv.config();
 
@@ -35,15 +40,6 @@ const io = httpServer
   : null;
 
 const prisma = new PrismaClient();
-const driverLocationStore = new Map<
-  string,
-  {
-    lat: number;
-    lng: number;
-    updatedAt: string;
-    loadId?: string;
-  }
->();
 const port = Number(process.env.PORT || 3000);
 const jwtSecret = process.env.JWT_SECRET || 'replace-this-jwt-secret';
 const bootstrapSuperAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase();
@@ -70,6 +66,28 @@ const verificationReviewableStatuses = [
   'approved',
   'rejected',
 ] as const;
+const walletCurrency = 'ETB';
+const topUpMinimumAmount = 10;
+
+const telebirrConfig: TelebirrConfig = {
+  baseUrl:
+    process.env.TELEBIRR_BASE_URL ||
+    'https://developerportal.ethiotelebirr.et:38443/apiaccess/payment/gateway',
+  webBaseUrl:
+    process.env.TELEBIRR_WEB_BASE_URL ||
+    'https://developerportal.ethiotelebirr.et:38443/payment/web/paygate?',
+  fabricAppId: process.env.TELEBIRR_FABRIC_APP_ID || '',
+  appSecret: process.env.TELEBIRR_APP_SECRET || '',
+  merchantAppId: process.env.TELEBIRR_MERCHANT_APP_ID || '',
+  merchantCode: process.env.TELEBIRR_MERCHANT_CODE || '',
+  privateKey: process.env.TELEBIRR_PRIVATE_KEY || '',
+  notifyUrl:
+    process.env.TELEBIRR_NOTIFY_URL ||
+    `${appBaseUrl.replace(/\/$/, '')}/api/payments/telebirr/notify`,
+  redirectUrl:
+    process.env.TELEBIRR_REDIRECT_URL ||
+    `${appDeepLinkScheme}://wallet/topup-complete`,
+};
 
 const verificationUserSelect = {
   id: true,
@@ -109,6 +127,299 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '12mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+const toJsonRecord = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+};
+
+const stringifyMetadata = (value: unknown) => JSON.stringify(value ?? null);
+const asJsonValue = (value: unknown) => value as Prisma.InputJsonValue;
+
+const parseBidNote = (value: unknown): Record<string, unknown> => {
+  if (value == null) return {};
+  const raw = String(value).trim();
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return toJsonRecord(parsed);
+  } catch {
+    return { note: raw };
+  }
+};
+
+const isSuccessStatus = (value: unknown) =>
+  ['success', 'completed', 'paid', 'finished'].includes(
+    String(value || '').trim().toLowerCase(),
+  );
+
+const formatWalletAmount = (value: number) => `${value.toFixed(2)} ${walletCurrency}`;
+
+const ensureWallet = async (userId: string) =>
+  prisma.wallet.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      currency: walletCurrency,
+    },
+  });
+
+const createNotification = async ({
+  userId,
+  type,
+  title,
+  body,
+  entityType,
+  entityId,
+  route,
+  metadata,
+}: {
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: string;
+  route?: string;
+  metadata?: Prisma.InputJsonValue;
+}) => {
+  await prisma.appNotification.create({
+    data: {
+      userId,
+      type,
+      title,
+      body,
+      entityType,
+      entityId,
+      route,
+      metadata,
+    },
+  });
+  const unreadCount = await prisma.appNotification.count({
+    where: { userId, isRead: false },
+  });
+  emitRealtime(`user_${userId}`, 'notification_created', {
+    userId,
+    type,
+    title,
+    body,
+    entityType,
+    entityId,
+    route,
+    unreadCount,
+    at: new Date().toISOString(),
+  });
+};
+
+const createWalletTransaction = async ({
+  walletId,
+  userId,
+  kind,
+  direction,
+  status = 'completed',
+  amount,
+  title,
+  description,
+  referenceType,
+  referenceId,
+  provider,
+  providerRef,
+  metadata,
+}: {
+  walletId: string;
+  userId: string;
+  kind: string;
+  direction: string;
+  status?: string;
+  amount: number;
+  title: string;
+  description?: string | null;
+  referenceType?: string;
+  referenceId?: string;
+  provider?: string;
+  providerRef?: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.walletTransaction.create({
+    data: {
+      walletId,
+      userId,
+      kind,
+      direction,
+      status,
+      amount,
+      currency: walletCurrency,
+      title,
+      description,
+      referenceType,
+      referenceId,
+      provider,
+      providerRef,
+      metadata,
+    },
+  });
+
+const reserveWalletFunds = async ({
+  userId,
+  amount,
+  threadId,
+  bidId,
+}: {
+  userId: string;
+  amount: number;
+  threadId: string;
+  bidId: string;
+}) => {
+  const wallet = await ensureWallet(userId);
+  const availableBalance = wallet.balance - wallet.reservedBalance;
+  if (availableBalance < amount) {
+    throw new Error(
+      `Insufficient wallet balance. Available ${formatWalletAmount(availableBalance)}, required ${formatWalletAmount(amount)}.`,
+    );
+  }
+
+  const updatedWallet = await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: { reservedBalance: { increment: amount } },
+  });
+
+  await createWalletTransaction({
+    walletId: wallet.id,
+    userId,
+    kind: 'escrow_hold',
+    direction: 'hold',
+    amount,
+    title: 'Funds reserved for accepted load',
+    description: 'Reserved from your wallet until delivery is completed.',
+    referenceType: 'thread',
+    referenceId: threadId,
+    metadata: { bidId },
+  });
+
+  return updatedWallet;
+};
+
+const releaseEscrowToDriver = async ({
+  ownerId,
+  driverId,
+  amount,
+  threadId,
+  bidId,
+}: {
+  ownerId: string;
+  driverId: string;
+  amount: number;
+  threadId: string;
+  bidId: string;
+}) => {
+  const [ownerWallet, driverWallet, existingRelease] = await Promise.all([
+    ensureWallet(ownerId),
+    ensureWallet(driverId),
+    prisma.walletTransaction.findFirst({
+      where: {
+        referenceType: 'bid',
+        referenceId: bidId,
+        kind: 'settlement_credit',
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  if (existingRelease) {
+    return { ownerWallet, driverWallet, settled: false };
+  }
+
+  if (ownerWallet.reservedBalance < amount) {
+    throw new Error('Reserved wallet balance is lower than the settlement amount.');
+  }
+
+  const { updatedOwnerWallet, updatedDriverWallet } = await prisma.$transaction(
+    async (tx) => {
+      const ownerWalletNext = await tx.wallet.update({
+        where: { id: ownerWallet.id },
+        data: {
+          reservedBalance: { decrement: amount },
+          balance: { decrement: amount },
+        },
+      });
+      const driverWalletNext = await tx.wallet.update({
+        where: { id: driverWallet.id },
+        data: {
+          balance: { increment: amount },
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: ownerWallet.id,
+          userId: ownerId,
+          kind: 'settlement_release',
+          direction: 'debit',
+          status: 'completed',
+          amount,
+          currency: walletCurrency,
+          title: 'Delivery settled from escrow',
+          description: 'Reserved funds were released to the assigned driver.',
+          referenceType: 'bid',
+          referenceId: bidId,
+          metadata: { threadId, driverId },
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: driverWallet.id,
+          userId: driverId,
+          kind: 'settlement_credit',
+          direction: 'credit',
+          status: 'completed',
+          amount,
+          currency: walletCurrency,
+          title: 'Delivery earnings received',
+          description: 'Funds from the completed load were added to your wallet.',
+          referenceType: 'bid',
+          referenceId: bidId,
+          metadata: { threadId, ownerId },
+        },
+      });
+      return {
+        updatedOwnerWallet: ownerWalletNext,
+        updatedDriverWallet: driverWalletNext,
+      };
+    },
+  );
+
+  await Promise.all([
+    createNotification({
+      userId: ownerId,
+      type: 'wallet_settlement_released',
+      title: 'Delivery payment released',
+      body: `Escrow funds for this load were released to the driver.`,
+      entityType: 'thread',
+      entityId: threadId,
+      route: '/wallet',
+      metadata: { bidId, amount },
+    }),
+    createNotification({
+      userId: driverId,
+      type: 'wallet_settlement_received',
+      title: 'Delivery earnings added',
+      body: `${formatWalletAmount(amount)} was added to your wallet for the completed load.`,
+      entityType: 'thread',
+      entityId: threadId,
+      route: '/wallet',
+      metadata: { bidId, amount },
+    }),
+  ]);
+
+  return {
+    ownerWallet: updatedOwnerWallet,
+    driverWallet: updatedDriverWallet,
+    settled: true,
+  };
+};
 
 const getMailer = () => {
   if (!smtpHost || !smtpUser || !smtpPass) {
@@ -456,22 +767,41 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const email = phoneNumber.toLowerCase();
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        name,
-        userType,
-        username: username.length === 0 ? null : username,
-        phoneNumber,
-        truckType: truckType.length === 0 ? null : truckType,
-        address: address.length === 0 ? null : address,
-        verificationStatus: 'not_submitted',
-      },
-      select: verificationUserSelect,
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          userType,
+          username: username.length === 0 ? null : username,
+          phoneNumber,
+          truckType: truckType.length === 0 ? null : truckType,
+          address: address.length === 0 ? null : address,
+          verificationStatus: 'not_submitted',
+        },
+        select: verificationUserSelect,
+      });
+      await tx.wallet.create({
+        data: {
+          userId: created.id,
+          currency: walletCurrency,
+        },
+      });
+      return created;
     });
 
     const token = signUserToken({ userId: user.id, email: user.email });
+    await createNotification({
+      userId: user.id,
+      type: 'welcome',
+      title: 'Welcome to Kora',
+      body:
+        user.userType === 'Driver'
+          ? 'Complete your verification, explore open loads, and keep an eye on return opportunities.'
+          : 'Top up your wallet, post your first load, and manage bids from one place.',
+      route: '/profile',
+    });
     res.status(201).json({ ok: true, token, user: sanitizeUser(user) });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -682,6 +1012,8 @@ app.get('/api/auth/me', requireAuth, async (req: AuthedRequest, res: Response) =
       return;
     }
 
+    await ensureWallet(user.id);
+
     res.json({ ok: true, user: sanitizeUser(user) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to load user';
@@ -826,6 +1158,433 @@ app.get('/api/users/:userId', requireAuth, async (req: AuthedRequest, res: Respo
   }
 });
 
+app.get('/api/notifications/summary', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const unreadCount = await prisma.appNotification.count({
+      where: { userId, isRead: false },
+    });
+
+    res.json({ ok: true, unreadCount });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load notification summary';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/notifications', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    const limitRaw = Number(req.query.limit ?? 40);
+    const offsetRaw = Number(req.query.offset ?? 0);
+    const unreadOnly = String(req.query.unreadOnly || '').trim() === 'true';
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 40;
+    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const notifications = await prisma.appNotification.findMany({
+      where: {
+        userId,
+        ...(unreadOnly ? { isRead: false } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
+    });
+
+    const unreadCount = await prisma.appNotification.count({
+      where: { userId, isRead: false },
+    });
+
+    const hasMore = notifications.length > limit;
+    const items = hasMore ? notifications.slice(0, limit) : notifications;
+
+    res.json({
+      ok: true,
+      notifications: items,
+      unreadCount,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + items.length : null,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load notifications';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.patch('/api/notifications/:notificationId/read', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    const notificationId = asSingleParam(req.params.notificationId);
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const notification = await prisma.appNotification.findUnique({
+      where: { id: notificationId },
+      select: { id: true, userId: true, isRead: true },
+    });
+
+    if (!notification || notification.userId !== userId) {
+      res.status(404).json({ ok: false, error: 'Notification not found' });
+      return;
+    }
+
+    const updated = notification.isRead
+      ? notification
+      : await prisma.appNotification.update({
+          where: { id: notificationId },
+          data: { isRead: true, readAt: new Date() },
+        });
+
+    const unreadCount = await prisma.appNotification.count({
+      where: { userId, isRead: false },
+    });
+
+    res.json({ ok: true, notification: updated, unreadCount });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update notification';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/notifications/read-all', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    await prisma.appNotification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true, readAt: new Date() },
+    });
+
+    res.json({ ok: true, unreadCount: 0 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to mark notifications as read';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/wallet', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const wallet = await ensureWallet(userId);
+    const pendingOrders = await prisma.paymentOrder.findMany({
+      where: {
+        userId,
+        type: 'wallet_topup',
+        status: { in: ['pending', 'requires_action'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        provider: true,
+        amount: true,
+        currency: true,
+        checkoutUrl: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    res.json({
+      ok: true,
+      wallet: {
+        ...wallet,
+        availableBalance: wallet.balance - wallet.reservedBalance,
+      },
+      pendingOrders,
+      telebirrConfigured: hasTelebirrConfig(telebirrConfig),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load wallet';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/wallet/transactions', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    const limitRaw = Number(req.query.limit ?? 40);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 40;
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    await ensureWallet(userId);
+    const transactions = await prisma.walletTransaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    res.json({ ok: true, transactions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load wallet transactions';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/wallet/topups', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    const amount = Number(req.body?.amount);
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount < topUpMinimumAmount) {
+      res.status(400).json({
+        ok: false,
+        error: `amount must be at least ${topUpMinimumAmount} ${walletCurrency}`,
+      });
+      return;
+    }
+
+    if (!hasTelebirrConfig(telebirrConfig)) {
+      res.status(503).json({
+        ok: false,
+        error: 'Telebirr is not configured yet. Add merchant credentials on the backend first.',
+      });
+      return;
+    }
+
+    const wallet = await ensureWallet(userId);
+    const merchOrderId = `KORA-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const checkout = await createTelebirrWebCheckout({
+      config: telebirrConfig,
+      title: 'Kora wallet top-up',
+      amount,
+      merchOrderId,
+      metadata: {
+        short_code: telebirrConfig.merchantCode,
+      },
+    });
+
+    const order = await prisma.paymentOrder.create({
+      data: {
+        userId,
+        walletId: wallet.id,
+        type: 'wallet_topup',
+        status: 'requires_action',
+        provider: 'telebirr',
+        amount,
+        currency: walletCurrency,
+        merchOrderId: checkout.merchOrderId,
+        providerOrderId: checkout.merchOrderId,
+        prepayId: checkout.prepayId,
+        checkoutUrl: checkout.checkoutUrl,
+        rawRequest: checkout.rawRequest,
+        providerPayload: asJsonValue(toJsonRecord(checkout.providerPayload)),
+      },
+    });
+
+    await createWalletTransaction({
+      walletId: wallet.id,
+      userId,
+      kind: 'topup_initiated',
+      direction: 'pending',
+      status: 'pending',
+      amount,
+      title: 'Wallet top-up started',
+      description: 'Complete the Telebirr checkout to add funds to your wallet.',
+      referenceType: 'payment_order',
+      referenceId: order.id,
+      provider: 'telebirr',
+      providerRef: checkout.prepayId,
+      metadata: asJsonValue({ merchOrderId }),
+    });
+
+    await createNotification({
+      userId,
+      type: 'wallet_topup_started',
+      title: 'Wallet top-up started',
+      body: `Continue in Telebirr to add ${formatWalletAmount(amount)} to your wallet.`,
+      entityType: 'payment_order',
+      entityId: order.id,
+      route: '/wallet',
+      metadata: asJsonValue({ checkoutUrl: checkout.checkoutUrl }),
+    });
+
+    res.status(201).json({ ok: true, order });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create top-up order';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/payments/:orderId', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const userId = req.auth?.userId;
+    const orderId = asSingleParam(req.params.orderId);
+
+    if (!userId) {
+      res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const order = await prisma.paymentOrder.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order || order.userId !== userId) {
+      res.status(404).json({ ok: false, error: 'Payment order not found' });
+      return;
+    }
+
+    res.json({ ok: true, order });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load payment order';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.post('/api/payments/telebirr/notify', async (req: Request, res: Response) => {
+  try {
+    const payload = {
+      ...toJsonRecord(req.body),
+      ...(req.query ? Object.fromEntries(Object.entries(req.query)) : {}),
+    };
+    const bizContent = toJsonRecord(payload.biz_content);
+    const merchOrderId = String(
+      payload.merch_order_id ??
+        payload.merchOrderId ??
+        payload.out_trade_no ??
+        bizContent.merch_order_id ??
+        bizContent.merchOrderId ??
+        '',
+    ).trim();
+
+    if (!merchOrderId) {
+      res.status(400).json({ ok: false, error: 'merch_order_id is required' });
+      return;
+    }
+
+    const order = await prisma.paymentOrder.findUnique({
+      where: { merchOrderId },
+    });
+
+    if (!order) {
+      res.status(404).json({ ok: false, error: 'Payment order not found' });
+      return;
+    }
+
+    const statusSource =
+      payload.trade_status ??
+      payload.status ??
+      payload.order_status ??
+      bizContent.trade_status ??
+      bizContent.status ??
+      bizContent.order_status;
+
+    const succeeded =
+      isSuccessStatus(statusSource) ||
+      isSuccessStatus(payload.result) ||
+      String(payload.code || bizContent.code || '').trim() === '0';
+
+    const wallet = order.walletId
+      ? await prisma.wallet.findUnique({ where: { id: order.walletId } })
+      : null;
+
+    if (succeeded && order.status !== 'completed' && wallet) {
+      await prisma.$transaction(async (tx) => {
+        await tx.paymentOrder.update({
+          where: { id: order.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            providerPayload: asJsonValue(payload),
+          },
+        });
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: order.amount } },
+        });
+        await tx.walletTransaction.updateMany({
+          where: {
+            referenceType: 'payment_order',
+            referenceId: order.id,
+            kind: 'topup_initiated',
+          },
+          data: { status: 'completed' },
+        });
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            userId: order.userId,
+            kind: 'topup_completed',
+            direction: 'credit',
+            status: 'completed',
+            amount: order.amount,
+            currency: walletCurrency,
+            title: 'Telebirr top-up completed',
+            description: 'Your wallet balance was updated after a successful Telebirr payment.',
+            referenceType: 'payment_order',
+            referenceId: order.id,
+            provider: 'telebirr',
+            providerRef: order.prepayId ?? order.providerOrderId ?? undefined,
+            metadata: asJsonValue(payload),
+          },
+        });
+      });
+
+      await createNotification({
+        userId: order.userId,
+        type: 'wallet_topup_completed',
+        title: 'Wallet top-up completed',
+        body: `${formatWalletAmount(order.amount)} was added to your wallet.`,
+        entityType: 'payment_order',
+        entityId: order.id,
+        route: '/wallet',
+      });
+    } else if (!succeeded && order.status !== 'completed') {
+      await prisma.paymentOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'failed',
+          failureReason: stringifyMetadata(payload),
+          providerPayload: asJsonValue(payload),
+        },
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to process Telebirr notification';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
 app.put('/api/users/:userId/verification-documents', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = asSingleParam(req.params.userId);
@@ -949,6 +1708,16 @@ app.put('/api/users/:userId/verification-documents', requireAuth, async (req: Au
       select: verificationUserSelect,
     });
 
+    await createNotification({
+      userId,
+      type: submitForReview ? 'verification_submitted' : 'verification_saved',
+      title: submitForReview ? 'Verification submitted' : 'Verification draft updated',
+      body: submitForReview
+        ? 'Your documents were sent for admin review.'
+        : 'Your verification details were saved. Submit them when you are ready.',
+      route: '/profile',
+    });
+
     res.json({ ok: true, user: sanitizeUser(updated) });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update verification documents';
@@ -959,10 +1728,16 @@ app.put('/api/users/:userId/verification-documents', requireAuth, async (req: Au
 app.get('/api/users/:userId/threads', requireAuth, async (req: AuthedRequest, res: Response) => {
   try {
     const userId = asSingleParam(req.params.userId);
+    const limitRaw = Number(req.query.limit ?? 20);
+    const offsetRaw = Number(req.query.offset ?? 0);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 20;
+    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
 
     const threads = await prisma.thread.findMany({
       where: { ownerId: userId },
       orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
       include: {
         bids: {
           select: {
@@ -975,7 +1750,19 @@ app.get('/api/users/:userId/threads', requireAuth, async (req: AuthedRequest, re
       },
     });
 
-    res.json({ ok: true, threads });
+    const hasMore = threads.length > limit;
+    const items = hasMore ? threads.slice(0, limit) : threads;
+
+    res.json({
+      ok: true,
+      threads: items,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + items.length : null,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user threads';
     res.status(500).json({ ok: false, error: message });
@@ -990,9 +1777,16 @@ app.get('/api/bids/me', requireAuth, async (req: AuthedRequest, res: Response) =
       return;
     }
 
+    const limitRaw = Number(req.query.limit ?? 20);
+    const offsetRaw = Number(req.query.offset ?? 0);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 20;
+    const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? Math.floor(offsetRaw) : 0;
+
     const bids = await prisma.bid.findMany({
       where: { driverId: userId },
       orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit + 1,
       include: {
         load: {
           select: {
@@ -1016,7 +1810,19 @@ app.get('/api/bids/me', requireAuth, async (req: AuthedRequest, res: Response) =
       },
     });
 
-    res.json({ ok: true, bids });
+    const hasMore = bids.length > limit;
+    const items = hasMore ? bids.slice(0, limit) : bids;
+
+    res.json({
+      ok: true,
+      bids: items,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + items.length : null,
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch your bids';
     res.status(500).json({ ok: false, error: message });
@@ -1172,6 +1978,7 @@ app.post('/api/threads', requireAuth, async (req: AuthedRequest, res: Response) 
         ownerId: verifiedCargoUser.id,
         message: String(req.body?.message || ''),
         weight: req.body?.weight == null ? null : Number(req.body.weight),
+        category: req.body?.category ?? null,
         type: req.body?.type ?? null,
         start: startLocation.city ?? req.body?.start ?? null,
         end: endLocation.city ?? req.body?.end ?? null,
@@ -1259,6 +2066,66 @@ app.get('/api/threads/:threadId', requireAuth, async (req: AuthedRequest, res: R
     res.json({ ok: true, thread });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to fetch thread';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+app.get('/api/threads/:threadId/return-load-suggestions', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const threadId = asSingleParam(req.params.threadId);
+    const limitRaw = Number(req.query.limit ?? 8);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 20) : 8;
+
+    const thread = await prisma.thread.findUnique({
+      where: { id: threadId },
+      select: {
+        id: true,
+        start: true,
+        end: true,
+        endCity: true,
+        endZone: true,
+        endRegion: true,
+      },
+    });
+
+    if (!thread) {
+      res.status(404).json({ ok: false, error: 'Thread not found' });
+      return;
+    }
+
+    const destination = resolveEthiopiaLocation({
+      city: thread.endCity ?? thread.end,
+      zone: thread.endZone,
+      region: thread.endRegion,
+      fallback: thread.end,
+    });
+    const destinationCity = (destination.city || thread.end || '').trim();
+    if (!destinationCity) {
+      res.json({ ok: true, suggestions: [] });
+      return;
+    }
+
+    const suggestions = await prisma.thread.findMany({
+      where: {
+        id: { not: threadId },
+        deliveryStatus: 'pending_bids',
+        OR: [
+          { startCity: { equals: destinationCity, mode: 'insensitive' } },
+          { start: { contains: destinationCity, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        owner: {
+          select: { id: true, name: true, profileImageUrl: true, userType: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    res.json({ ok: true, suggestions });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load return suggestions';
     res.status(500).json({ ok: false, error: message });
   }
 });
@@ -1449,7 +2316,13 @@ app.put('/api/threads/:threadId/my-bid', requireAuth, async (req: AuthedRequest,
 
     const thread = await prisma.thread.findUnique({
       where: { id: threadId },
-      select: { id: true, deliveryStatus: true },
+      select: {
+        id: true,
+        deliveryStatus: true,
+        ownerId: true,
+        start: true,
+        end: true,
+      },
     });
 
     if (!thread) {
@@ -1510,6 +2383,19 @@ app.put('/api/threads/:threadId/my-bid', requireAuth, async (req: AuthedRequest,
             updatedAt: true,
           },
         });
+
+    await createNotification({
+      userId: thread.ownerId,
+      type: existing ? 'bid_updated' : 'bid_received',
+      title: existing ? 'A bid was updated' : 'A new bid arrived',
+      body: existing
+        ? `A driver updated their offer for ${thread.start || 'this load'} -> ${thread.end || 'destination'}.`
+        : `A driver placed a bid for ${thread.start || 'this load'} -> ${thread.end || 'destination'}.`,
+      entityType: 'thread',
+      entityId: threadId,
+      route: `/loads/${threadId}`,
+      metadata: { bidId: bid.id, amount },
+    });
 
     res.json({ ok: true, bid, created: !existing });
   } catch (error) {
@@ -1583,7 +2469,14 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
 
     const thread = await prisma.thread.findUnique({
       where: { id: threadId },
-      select: { id: true, ownerId: true, deliveryStatus: true, message: true },
+      select: {
+        id: true,
+        ownerId: true,
+        deliveryStatus: true,
+        message: true,
+        start: true,
+        end: true,
+      },
     });
 
     if (!thread) {
@@ -1616,6 +2509,32 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
       return;
     }
 
+    const ownerWallet = await ensureWallet(thread.ownerId);
+    const availableBalance = ownerWallet.balance - ownerWallet.reservedBalance;
+    if (availableBalance < finalPrice) {
+      res.status(409).json({
+        ok: false,
+        error: `Insufficient wallet balance. Available ${formatWalletAmount(availableBalance)}, required ${formatWalletAmount(finalPrice)}.`,
+        code: 'WALLET_TOPUP_REQUIRED',
+        wallet: {
+          balance: ownerWallet.balance,
+          reservedBalance: ownerWallet.reservedBalance,
+          availableBalance,
+          currency: walletCurrency,
+        },
+      });
+      return;
+    }
+
+    const otherPendingBids = await prisma.bid.findMany({
+      where: {
+        loadId: threadId,
+        id: { not: bidId },
+        status: 'pending',
+      },
+      select: { id: true, driverId: true },
+    });
+
     const parsedWinningNote = (() => {
       const raw = winningBid.note ? String(winningBid.note) : '';
       if (!raw) return {} as Record<string, unknown>;
@@ -1629,6 +2548,12 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
     })();
 
     await prisma.$transaction(async (tx) => {
+      await tx.wallet.update({
+        where: { id: ownerWallet.id },
+        data: {
+          reservedBalance: { increment: finalPrice },
+        },
+      });
       await tx.bid.update({
         where: { id: bidId },
         data: {
@@ -1640,6 +2565,22 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
             acceptedBy: userId,
             acceptedAt: new Date().toISOString(),
           }),
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          walletId: ownerWallet.id,
+          userId: thread.ownerId,
+          kind: 'escrow_hold',
+          direction: 'hold',
+          status: 'completed',
+          amount: finalPrice,
+          currency: walletCurrency,
+          title: 'Funds reserved for accepted load',
+          description: 'The accepted load amount was held from your wallet until delivery is completed.',
+          referenceType: 'bid',
+          referenceId: bidId,
+          metadata: { threadId, driverId: acceptedCarrierId },
         },
       });
 
@@ -1686,6 +2627,41 @@ app.patch('/api/threads/:threadId/bids/:bidId/accept', requireAuth, async (req: 
       at: new Date().toISOString(),
     });
 
+    await Promise.all([
+      createNotification({
+        userId: acceptedCarrierId,
+        type: 'bid_accepted',
+        title: 'Your bid was accepted',
+        body: `You won the load from ${thread.start || 'pickup'} to ${thread.end || 'destination'}.`,
+        entityType: 'thread',
+        entityId: threadId,
+        route: `/loads/${threadId}`,
+        metadata: { bidId, finalPrice },
+      }),
+      createNotification({
+        userId: thread.ownerId,
+        type: 'wallet_escrow_held',
+        title: 'Funds reserved for this load',
+        body: `${formatWalletAmount(finalPrice)} was reserved from your wallet for the accepted bid.`,
+        entityType: 'thread',
+        entityId: threadId,
+        route: '/wallet',
+        metadata: { bidId },
+      }),
+      ...otherPendingBids.map((entry) =>
+        createNotification({
+          userId: entry.driverId,
+          type: 'bid_rejected',
+          title: 'Another bid was selected',
+          body: `The load from ${thread.start || 'pickup'} to ${thread.end || 'destination'} has been awarded to another driver.`,
+          entityType: 'thread',
+          entityId: threadId,
+          route: `/loads/${threadId}`,
+          metadata: { bidId: entry.id },
+        }),
+      ),
+    ]);
+
     res.json({ ok: true, bid: acceptedBid });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to accept bid';
@@ -1697,7 +2673,7 @@ app.post('/api/threads/:threadId/chat', requireAuth, async (req: AuthedRequest, 
   try {
     const threadId = asSingleParam(req.params.threadId);
     const senderId = req.auth?.userId;
-    const receiverId = req.body?.receiverId == null ? null : String(req.body.receiverId);
+    let receiverId = req.body?.receiverId == null ? null : String(req.body.receiverId);
     const text = String(req.body?.text || '').trim();
 
     if (!senderId) {
@@ -1708,6 +2684,25 @@ app.post('/api/threads/:threadId/chat', requireAuth, async (req: AuthedRequest, 
     if (!text) {
       res.status(400).json({ ok: false, error: 'text is required' });
       return;
+    }
+
+    if (!receiverId) {
+      const thread = await prisma.thread.findUnique({
+        where: { id: threadId },
+        select: { ownerId: true },
+      });
+      if (thread) {
+        if (thread.ownerId !== senderId) {
+          receiverId = thread.ownerId;
+        } else {
+          const acceptedBid = await prisma.bid.findFirst({
+            where: { loadId: threadId, status: { in: ['accepted', 'completed'] } },
+            orderBy: { createdAt: 'desc' },
+            select: { driverId: true },
+          });
+          receiverId = acceptedBid?.driverId ?? null;
+        }
+      }
     }
 
     const message = await prisma.chatMessage.create({
@@ -1728,6 +2723,19 @@ app.post('/api/threads/:threadId/chat', requireAuth, async (req: AuthedRequest, 
     });
 
     emitRealtime(`chat_${threadId}`, 'chat_message_created', message);
+
+    if (receiverId && receiverId !== senderId) {
+      await createNotification({
+        userId: receiverId,
+        type: 'chat_message',
+        title: 'New message on a load',
+        body: text.length > 90 ? `${text.slice(0, 87)}...` : text,
+        entityType: 'thread',
+        entityId: threadId,
+        route: `/loads/${threadId}`,
+      });
+    }
+
     res.status(201).json({ ok: true, message });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to send chat message';
@@ -1818,7 +2826,7 @@ app.patch('/api/threads/:threadId/delivery/status', requireAuth, async (req: Aut
         status: { in: ['accepted', 'completed'] },
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true },
+      select: { id: true, driverId: true, amount: true, note: true },
     });
 
     if (!acceptedBid) {
@@ -1862,6 +2870,18 @@ app.patch('/api/threads/:threadId/delivery/status', requireAuth, async (req: Aut
           completedAt: new Date(),
         },
       });
+
+      const note = parseBidNote(acceptedBid.note);
+      const finalPrice = Number(note.finalPrice ?? acceptedBid.amount);
+      if (Number.isFinite(finalPrice) && finalPrice > 0) {
+        await releaseEscrowToDriver({
+          ownerId: thread.ownerId,
+          driverId: acceptedBid.driverId,
+          amount: finalPrice,
+          threadId,
+          bidId: acceptedBid.id,
+        });
+      }
     }
 
     emitRealtime(`tracking_${threadId}`, 'delivery_status_changed', {
@@ -1870,6 +2890,17 @@ app.patch('/api/threads/:threadId/delivery/status', requireAuth, async (req: Aut
       to: nextStatus,
       by: userId,
       at: new Date().toISOString(),
+    });
+
+    await createNotification({
+      userId: thread.ownerId,
+      type: 'delivery_status_changed',
+      title: 'Delivery status updated',
+      body: `The driver moved this load from ${currentStatus.replace(/_/g, ' ')} to ${nextStatus.replace(/_/g, ' ')}.`,
+      entityType: 'thread',
+      entityId: threadId,
+      route: `/loads/${threadId}`,
+      metadata: { from: currentStatus, to: nextStatus },
     });
 
     res.json({ ok: true, thread: updatedThread });
@@ -1923,7 +2954,7 @@ app.patch('/api/threads/:threadId/delivery/complete', requireAuth, async (req: A
       return;
     }
 
-    const allowed = new Set(['accepted', 'driving_to_location', 'picked_up', 'on_the_road']);
+    const allowed = new Set(['accepted', 'driving_to_location', 'picked_up', 'on_the_road', 'delivered']);
     if (!allowed.has((thread.deliveryStatus ?? '').toString())) {
       res.status(409).json({ ok: false, error: 'Delivery cannot be completed from current status' });
       return;
@@ -1968,6 +2999,28 @@ app.patch('/api/threads/:threadId/delivery/complete', requireAuth, async (req: A
         },
       }),
     ]);
+
+    const finalPrice = Number(parsedNote.finalPrice);
+    if (Number.isFinite(finalPrice) && finalPrice > 0) {
+      await releaseEscrowToDriver({
+        ownerId: thread.ownerId,
+        driverId: bid.driverId,
+        amount: finalPrice,
+        threadId,
+        bidId,
+      });
+    }
+
+    await createNotification({
+      userId: bid.driverId,
+      type: 'delivery_confirmed',
+      title: 'Delivery confirmed',
+      body: 'The load owner confirmed delivery and attached proof of delivery details.',
+      entityType: 'thread',
+      entityId: threadId,
+      route: `/loads/${threadId}`,
+      metadata: { bidId },
+    });
 
     res.json({ ok: true, thread: updatedThread, bid: updatedBid });
   } catch (error) {
@@ -2055,6 +3108,17 @@ app.post('/api/users/:driverId/ratings', requireAuth, async (req: AuthedRequest,
       },
     });
 
+    await createNotification({
+      userId: driverId,
+      type: 'driver_rated',
+      title: 'You received a new rating',
+      body: comment != null && comment.trim().length > 0
+        ? `A load owner rated you ${rating}/5 and left a note.`
+        : `A load owner rated you ${rating}/5.`,
+      route: '/profile',
+      metadata: asJsonValue({ bidId, rating }),
+    });
+
     res.status(201).json({
       ok: true,
       summary: {
@@ -2117,65 +3181,6 @@ app.post('/api/telemetry/error', requireAuth, async (req: AuthedRequest, res: Re
     res.status(201).json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to submit telemetry error';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
-
-app.put('/api/drivers/:driverId/location', requireAuth, async (req: AuthedRequest, res: Response) => {
-  try {
-    const driverId = asSingleParam(req.params.driverId);
-    const userId = req.auth?.userId;
-    const lat = Number(req.body?.latitude);
-    const lng = Number(req.body?.longitude);
-    const loadId = req.body?.loadId == null ? undefined : String(req.body.loadId);
-
-    if (!userId) {
-      res.status(401).json({ ok: false, error: 'Unauthorized' });
-      return;
-    }
-
-    if (userId !== driverId) {
-      res.status(403).json({ ok: false, error: 'Only the same driver can update location' });
-      return;
-    }
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      res.status(400).json({ ok: false, error: 'latitude and longitude are required numbers' });
-      return;
-    }
-
-    const payload = {
-      lat,
-      lng,
-      updatedAt: new Date().toISOString(),
-      loadId,
-    };
-
-    driverLocationStore.set(driverId, payload);
-    if (loadId) {
-      emitRealtime(`tracking_${loadId}`, 'driver_location_changed', {
-        driverId,
-        lat,
-        lng,
-        loadId,
-        updatedAt: payload.updatedAt,
-      });
-    }
-
-    res.json({ ok: true, location: payload });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to update location';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
-
-app.get('/api/drivers/:driverId/location', requireAuth, async (req: AuthedRequest, res: Response) => {
-  try {
-    const driverId = asSingleParam(req.params.driverId);
-    const location = driverLocationStore.get(driverId) ?? null;
-    res.json({ ok: true, location });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch location';
     res.status(500).json({ ok: false, error: message });
   }
 });
@@ -2712,6 +3717,24 @@ app.patch('/api/admin/users/:userId/verification', requireAuth, requireAdmin, as
         tradeLicensePhoto: true,
         tradeRegistrationCertificatePhoto: true,
       },
+    });
+
+    await createNotification({
+      userId: updated.id,
+      type: `verification_${status}`,
+      title:
+        status === 'approved'
+          ? 'Verification approved'
+          : status === 'rejected'
+            ? 'Verification needs attention'
+            : 'Verification updated',
+      body:
+        status === 'approved'
+          ? 'Your account is now approved for marketplace actions.'
+          : status === 'rejected'
+            ? note?.trim() || 'Review the feedback and resubmit your documents.'
+            : `Your verification status is now ${status}.`,
+      route: '/profile',
     });
 
     res.json({ ok: true, user: updated });

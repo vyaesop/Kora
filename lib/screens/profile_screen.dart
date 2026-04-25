@@ -2,17 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'package:kora/app_localizations.dart';
 import 'package:kora/model/thread_message.dart';
+import 'package:kora/screens/notifications_screen.dart';
 import 'package:kora/screens/settings_screen.dart';
 import 'package:kora/screens/verification_documents_screen.dart';
+import 'package:kora/screens/wallet_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/verification_access.dart';
 import 'package:kora/widgets/document_image.dart';
+import 'package:kora/widgets/activity_action_buttons.dart';
 import 'package:kora/widgets/profile_avatar.dart';
-import 'package:kora/widgets/thread_message.dart';
-import 'comment_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Future<void> Function()? onReplayTour;
@@ -29,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _user;
-  List<ThreadMessage> _myThreads = const [];
   List<ThreadMessage> _acceptedLoads = const [];
 
   @override
@@ -42,34 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Map<String, dynamic> row, {
     Map<String, dynamic>? owner,
   }) {
-    final ownerData =
-        owner ??
-        (row['owner'] as Map<String, dynamic>? ?? const <String, dynamic>{});
-    return ThreadMessage(
-      id: (row['id'] ?? '').toString(),
-      docId: (row['id'] ?? '').toString(),
-      senderName: (ownerData['name'] ?? _user?['name'] ?? 'Unknown').toString(),
-      senderProfileImageUrl: (ownerData['profileImageUrl'] ?? '').toString(),
-      ownerId: (row['ownerId'] ?? ownerData['id'] ?? _user?['id'] ?? '')
-          .toString(),
-      message: (row['message'] ?? '').toString(),
-      timestamp:
-          DateTime.tryParse((row['createdAt'] ?? '').toString()) ??
-          DateTime.now(),
-      likes: const [],
-      comments: const [],
-      weight: (row['weight'] as num?)?.toDouble() ?? 0,
-      type: (row['type'] ?? '').toString(),
-      start: (row['start'] ?? '').toString(),
-      end: (row['end'] ?? '').toString(),
-      packaging: (row['packaging'] ?? '').toString(),
-      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
-      startLat: (row['startLat'] as num?)?.toDouble() ?? 0,
-      startLng: (row['startLng'] as num?)?.toDouble() ?? 0,
-      endLat: (row['endLat'] as num?)?.toDouble() ?? 0,
-      endLng: (row['endLng'] as num?)?.toDouble() ?? 0,
-      deliveryStatus: row['deliveryStatus']?.toString(),
-    );
+    if (owner == null) return ThreadMessage.fromApiMap(row);
+    return ThreadMessage.fromApiMap({...row, 'owner': owner});
   }
 
   Future<void> _load() async {
@@ -89,19 +63,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user == null) {
         throw Exception('User not found');
       }
-
-      final threadsData = await BackendHttp.request(
-        path: '/api/users/$userId/threads',
-      );
-      final threadRows = (threadsData['threads'] is List)
-          ? (threadsData['threads'] as List)
-                .whereType<Map<String, dynamic>>()
-                .toList()
-          : <Map<String, dynamic>>[];
-
-      final myThreads = threadRows
-          .map((row) => _threadFromMap(row, owner: user))
-          .toList();
 
       final myBidsData = await BackendHttp.request(path: '/api/bids/me');
       final bidRows = (myBidsData['bids'] is List)
@@ -123,7 +84,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() {
         _user = user;
-        _myThreads = myThreads;
         _acceptedLoads = acceptedLoads;
         _loading = false;
       });
@@ -143,56 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (changed == true) {
       await _load();
     }
-  }
-
-  Widget _threadList(List<ThreadMessage> threads) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (threads.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? AppPalette.darkCard : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
-          ),
-        ),
-        child: Text(AppLocalizations.of(context).tr('noItemsYet')),
-      );
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: threads.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final thread = threads[index];
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    CommentScreen(message: thread, threadId: thread.docId),
-              ),
-            );
-          },
-          child: ThreadMessageWidget(
-            message: thread,
-            onLike: () {},
-            onDisLike: () {},
-            onComment: () {},
-            onProfileTap: null,
-            panelController: null,
-            userId: (_user?['id'] ?? '').toString(),
-            showBidButton: false,
-            showBidStatusWhenHidden: false,
-          ),
-        );
-      },
-    );
   }
 
   @override
@@ -230,6 +140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: Text(localizations.tr('profile')),
         actions: [
+          const ActivityActionButtons(),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
           IconButton(
             tooltip: 'Settings',
@@ -304,10 +215,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     runSpacing: 8,
                     children: [
                       _HeroChip(label: userType),
-                      _HeroChip(
-                        label:
-                            'Verification: ${VerificationAccess.statusTitle(verification)}',
-                      ),
+                      // _HeroChip(
+                      //   label:
+                      //       'Verification: ${VerificationAccess.statusTitle(verification)}',
+                      // ),
                       _HeroChip(
                         label:
                             '${localizations.tr('ratingLabel')}: ${ratingAvg.toStringAsFixed(1)} ($ratingCount)',
@@ -317,12 +228,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 18),
                   Row(
                     children: [
-                      Expanded(
-                        child: _ProfileMetricCard(
-                          label: localizations.tr('myLoads'),
-                          value: _myThreads.length.toString(),
-                        ),
-                      ),
+                      // Expanded(
+                      //   child: _ProfileMetricCard(
+                      //     label: localizations.tr('myLoads'),
+                      //     value: _myThreads.length.toString(),
+                      //   ),
+                      // ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _ProfileMetricCard(
@@ -338,7 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 18),
             const _SectionTitle(
               title: 'Account details',
-              subtitle: 'Important profile information at a glance.',
+              subtitle: 'Important profile information.',
             ),
             const SizedBox(height: 10),
             _InfoCard(
@@ -380,19 +291,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 18),
-            _SectionTitle(
-              title: localizations.tr('myLoads'),
-              subtitle: 'Your posted or owned shipments.',
+            const _SectionTitle(
+              title: 'Activity hub',
+              subtitle:
+                  'Jump into notifications, wallet balance, and marketplace updates.',
             ),
             const SizedBox(height: 10),
-            _threadList(_myThreads),
-            const SizedBox(height: 18),
-            _SectionTitle(
-              title: localizations.tr('acceptedLoads'),
-              subtitle: 'Loads currently awarded to you.',
+            _InfoCard(
+              color: cardColor,
+              borderColor: cardBorder,
+              children: [
+                const _ProfileActionTile(
+                  title: 'Wallet',
+                  subtitle:
+                      'Track top-ups, reserved load funds, and completed delivery earnings.',
+                  icon: Icons.account_balance_wallet_outlined,
+                  destination: 'wallet',
+                ),
+                Divider(color: cardBorder),
+                const _ProfileActionTile(
+                  title: 'Notifications',
+                  subtitle:
+                      'See bids, delivery milestones, chat activity, verification, and wallet updates.',
+                  icon: Icons.notifications_none_rounded,
+                  destination: 'notifications',
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            _threadList(_acceptedLoads),
+            // const SizedBox(height: 18),
+            // _SectionTitle(
+            //   title: localizations.tr('myLoads'),
+            //   subtitle: 'Your posted or owned shipments.',
+            // ),
+            // const SizedBox(height: 10),
+            // _threadList(_myThreads),
+            // const SizedBox(height: 18),
+            // _SectionTitle(
+            //   title: localizations.tr('acceptedLoads'),
+            //   subtitle: 'Loads currently awarded to you.',
+            // ),
+            // const SizedBox(height: 10),
+            // _threadList(_acceptedLoads),
           ],
         ),
       ),
@@ -555,6 +494,57 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileActionTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String destination;
+
+  const _ProfileActionTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.destination,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: isDark ? AppPalette.darkSurfaceRaised : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(icon),
+      ),
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: isDark ? AppPalette.darkTextSoft : Colors.black54,
+              height: 1.4,
+            ),
+      ),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () {
+        final Widget screen = destination == 'wallet'
+            ? const WalletScreen()
+            : const NotificationsScreen();
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+      },
     );
   }
 }

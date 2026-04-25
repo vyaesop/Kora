@@ -3,13 +3,18 @@ import 'package:kora/app_localizations.dart';
 import 'package:kora/model/thread_message.dart';
 import 'package:kora/model/user.dart';
 import 'package:kora/screens/comment_screen.dart';
+import 'package:kora/screens/notifications_screen.dart';
+import 'package:kora/screens/wallet_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/utils/ethiopia_locations.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/load_categories.dart';
+import 'package:kora/utils/recommendation_service.dart';
 import 'package:kora/utils/session_preferences.dart';
 import 'package:kora/utils/verification_access.dart';
+import 'package:kora/widgets/activity_action_buttons.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
 class PreFeedDriverScreen extends StatefulWidget {
@@ -57,16 +62,36 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
               'pending_bids',
         )
         .toList();
+
     final driverCity = await SessionPreferences.getDriverCity();
-    if (driverCity != null && driverCity.trim().isNotEmpty) {
-      final normalized = _normalizeCity(driverCity);
-      threads.sort(
-        (a, b) => _cityMatchScore(
-          b,
-          normalized,
-        ).compareTo(_cityMatchScore(a, normalized)),
+    final recentTokens = await RecommendationService.loadRecentRouteTokens();
+    final normalizedCity = driverCity != null && driverCity.trim().isNotEmpty
+        ? _normalizeCity(driverCity)
+        : '';
+
+    threads.sort((a, b) {
+      final msgA = ThreadMessage.fromApiMap(a);
+      final msgB = ThreadMessage.fromApiMap(b);
+      final routeFitsA =
+          normalizedCity.isNotEmpty &&
+          (_normalizeCity(msgA.start) == normalizedCity ||
+              _normalizeCity(msgA.end) == normalizedCity);
+      final routeFitsB =
+          normalizedCity.isNotEmpty &&
+          (_normalizeCity(msgB.start) == normalizedCity ||
+              _normalizeCity(msgB.end) == normalizedCity);
+      final scoreA = RecommendationService.scoreLoad(
+        thread: msgA,
+        routeFits: routeFitsA,
+        recentTokens: recentTokens,
       );
-    }
+      final scoreB = RecommendationService.scoreLoad(
+        thread: msgB,
+        routeFits: routeFitsB,
+        recentTokens: recentTokens,
+      );
+      return scoreB.compareTo(scoreA);
+    });
 
     return threads.take(4).toList();
   }
@@ -87,54 +112,12 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
         .toList();
   }
 
-  ThreadMessage _threadMessageFromMap(Map<String, dynamic> row) {
-    final owner = row['owner'] as Map<String, dynamic>? ?? const {};
-    final createdRaw = row['createdAt']?.toString();
-    final createdAt = createdRaw == null
-        ? DateTime.now()
-        : DateTime.tryParse(createdRaw) ?? DateTime.now();
-
-    return ThreadMessage(
-      id: (row['id'] ?? '').toString(),
-      docId: (row['id'] ?? '').toString(),
-      senderName: (owner['name'] ?? 'Load Owner').toString(),
-      senderProfileImageUrl: (owner['profileImageUrl'] ?? '').toString(),
-      ownerId: (row['ownerId'] ?? owner['id'] ?? '').toString(),
-      message: (row['message'] ?? '').toString(),
-      timestamp: createdAt,
-      likes: const [],
-      comments: const [],
-      weight: (row['weight'] as num?)?.toDouble() ?? 0.0,
-      type: (row['type'] ?? '').toString(),
-      start: (row['start'] ?? '').toString(),
-      end: (row['end'] ?? '').toString(),
-      packaging: (row['packaging'] ?? '').toString(),
-      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
-      startLat: (row['startLat'] as num?)?.toDouble() ?? 0.0,
-      startLng: (row['startLng'] as num?)?.toDouble() ?? 0.0,
-      endLat: (row['endLat'] as num?)?.toDouble() ?? 0.0,
-      endLng: (row['endLng'] as num?)?.toDouble() ?? 0.0,
-      deliveryStatus: row['deliveryStatus']?.toString(),
-    );
-  }
+  ThreadMessage _threadMessageFromMap(Map<String, dynamic> row) =>
+      ThreadMessage.fromApiMap(row);
 
   String _normalizeCity(String raw) {
     final matched = findEthiopiaCity(raw);
     return (matched?.city ?? raw).trim().toLowerCase();
-  }
-
-  int _cityMatchScore(Map<String, dynamic> thread, String driverCity) {
-    final startRaw = (thread['startCity'] ?? thread['start'] ?? '')
-        .toString()
-        .trim();
-    final endRaw = (thread['endCity'] ?? thread['end'] ?? '').toString().trim();
-    final start = startRaw.isEmpty ? '' : _normalizeCity(startRaw);
-    final end = endRaw.isEmpty ? '' : _normalizeCity(endRaw);
-
-    if (driverCity.isEmpty) return 0;
-    if (start == driverCity || end == driverCity) return 2;
-    if (start.contains(driverCity) || end.contains(driverCity)) return 1;
-    return 0;
   }
 
   void _openLoadDetails(BuildContext context, Map<String, dynamic> row) {
@@ -169,6 +152,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                 '${localizations.tr('welcome')}, ${widget.user.name}',
               ),
               actions: const [
+                ActivityActionButtons(),
                 Padding(
                   padding: EdgeInsets.only(right: 12),
                   child: LanguageSwitcher(),
@@ -191,6 +175,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
+                    const ActivityActionButtons(),
                     const LanguageSwitcher(),
                   ],
                 ),
@@ -199,11 +184,11 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
               _DashboardHero(
                 eyebrow: localizations.tr('driverHubTitle'),
                 title: 'Stay focused on the loads that need action.',
-                subtitle:
-                    'See your active work, jump into open opportunities, and keep your driver profile ready for new awards.',
-                primaryLabel: localizations.tr('openFeed'),
+                // subtitle:
+                //     'See your active work, jump into open opportunities, and keep your driver profile ready.',
+                primaryLabel: localizations.tr('myBids'),
                 primaryIcon: Icons.rss_feed_rounded,
-                onPrimaryTap: widget.onContinueToFeed,
+                onPrimaryTap: () => widget.onSelectTab(2),
                 secondaryLabel: localizations.tr('myBids'),
                 secondaryIcon: Icons.local_offer_outlined,
                 onSecondaryTap: () => widget.onSelectTab(2),
@@ -212,10 +197,10 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                     label: localizations.tr('activeJobs'),
                     value: acceptedLoadsCount.toString(),
                   ),
-                  _HeroMetricData(
-                    label: localizations.tr('suggestedLoads'),
-                    value: '4',
-                  ),
+                  // _HeroMetricData(
+                  //   label: localizations.tr('suggestedLoads'),
+                  //   value: '4',
+                  // ),
                   _HeroMetricData(
                     label: localizations.tr('profile'),
                     value: VerificationAccess.statusTitle(
@@ -239,6 +224,9 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                       title: localizations.tr('openFeed'),
                       subtitle:
                           'Browse open loads without the extra search step.',
+                      accent: const Color(0xFF0F766E),
+                      iconBackground: const Color(0xFFCCFBF1),
+                      cardTint: const Color(0xFFF0FDFA),
                       onTap: widget.onContinueToFeed,
                     ),
                   ),
@@ -249,7 +237,52 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                       title: localizations.tr('profile'),
                       subtitle:
                           'Manage notifications and track verification progress.',
+                      accent: const Color(0xFF4F46E5),
+                      iconBackground: const Color(0xFFEEF2FF),
+                      cardTint: const Color(0xFFF8FAFF),
                       onTap: widget.onOpenProfile,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Wallet',
+                      subtitle:
+                          'See reserved funds, settlements, and Telebirr setup.',
+                      accent: const Color(0xFF15803D),
+                      iconBackground: const Color(0xFFDCFCE7),
+                      cardTint: const Color(0xFFF4FFF7),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const WalletScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Notifications',
+                      subtitle:
+                          'Open bid responses, delivery updates, and alerts.',
+                      accent: const Color(0xFFB45309),
+                      iconBackground: const Color(0xFFFFEDD5),
+                      cardTint: const Color(0xFFFFF7ED),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -341,9 +374,10 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
                           onPressed: () => _openLoadDetails(context, data),
                           child: const Text('Open'),
                         ),
-                        footer:
-                            (data['type'] ?? localizations.tr('searchGeneral'))
-                                .toString(),
+                        footer: displayLoadType(
+                          category: data['category']?.toString(),
+                          subtype: data['type']?.toString(),
+                        ),
                         onTap: () => _openLoadDetails(context, data),
                       );
                     },
@@ -395,7 +429,7 @@ class _PreFeedDriverScreenState extends State<PreFeedDriverScreen> {
 class _DashboardHero extends StatelessWidget {
   final String eyebrow;
   final String title;
-  final String subtitle;
+  // final String subtitle;
   final String primaryLabel;
   final IconData primaryIcon;
   final VoidCallback onPrimaryTap;
@@ -407,7 +441,7 @@ class _DashboardHero extends StatelessWidget {
   const _DashboardHero({
     required this.eyebrow,
     required this.title,
-    required this.subtitle,
+    // required this.subtitle,
     required this.primaryLabel,
     required this.primaryIcon,
     required this.onPrimaryTap,
@@ -452,13 +486,13 @@ class _DashboardHero extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white70,
-              height: 1.45,
-            ),
-          ),
+          // Text(
+          //   subtitle,
+          //   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          //     color: Colors.white70,
+          //     height: 1.45,
+          //   ),
+          // ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 10,
@@ -485,19 +519,19 @@ class _DashboardHero extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onSecondaryTap,
-                  icon: Icon(secondaryIcon),
-                  label: Text(secondaryLabel),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withAlpha((0.28 * 255).round()),
-                    ),
-                  ),
-                ),
-              ),
+              // Expanded(
+              //   child: OutlinedButton.icon(
+              //     onPressed: onSecondaryTap,
+              //     icon: Icon(secondaryIcon),
+              //     label: Text(secondaryLabel),
+              //     style: OutlinedButton.styleFrom(
+              //       foregroundColor: Colors.white,
+              //       side: BorderSide(
+              //         color: Colors.white.withAlpha((0.28 * 255).round()),
+              //       ),
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ],
@@ -586,12 +620,18 @@ class _QuickActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color accent;
+  final Color iconBackground;
+  final Color cardTint;
   final VoidCallback onTap;
 
   const _QuickActionCard({
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.accent,
+    required this.iconBackground,
+    required this.cardTint,
     required this.onTap,
   });
 
@@ -604,10 +644,12 @@ class _QuickActionCard extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isDark ? AppPalette.darkCard : AppPalette.card,
+          color: isDark ? AppPalette.darkCard : cardTint,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+            color: isDark
+                ? AppPalette.darkOutline
+                : accent.withAlpha((0.20 * 255).round()),
           ),
           boxShadow: [
             BoxShadow(
@@ -626,10 +668,10 @@ class _QuickActionCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFE0F2FE),
+                color: iconBackground,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: const Color(0xFF0369A1)),
+              child: Icon(icon, color: accent),
             ),
             const SizedBox(height: 14),
             Text(

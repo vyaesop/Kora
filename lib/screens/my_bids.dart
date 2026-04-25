@@ -7,6 +7,7 @@ import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/error_handler.dart';
 import 'package:kora/utils/firestore_service.dart';
 import 'package:kora/utils/formatters.dart';
+import 'package:kora/utils/load_categories.dart';
 
 class MyBidsScreen extends StatefulWidget {
   const MyBidsScreen({super.key});
@@ -16,20 +17,114 @@ class MyBidsScreen extends StatefulWidget {
 }
 
 class _MyBidsScreenState extends State<MyBidsScreen> {
-  late Future<List<Map<String, dynamic>>> _bidsFuture;
+  static const int _pageSize = 12;
+
+  final ScrollController _scrollController = ScrollController();
+
+  bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  String? _error;
+  int _nextOffset = 0;
+  List<Map<String, dynamic>> _bids = const [];
 
   @override
   void initState() {
     super.initState();
-    _bidsFuture = _fetchBids();
+    _scrollController.addListener(_handleScroll);
+    _load();
   }
 
-  Future<void> _reload({bool forceRefresh = false}) async {
-    final future = _fetchBids(forceRefresh: forceRefresh);
-    if (mounted) {
-      setState(() => _bidsFuture = future);
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients ||
+        _loading ||
+        _loadingMore ||
+        !_hasMore) {
+      return;
     }
-    await future;
+
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent - 320) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _load({bool forceRefresh = false}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final page = await _fetchPage(offset: 0, forceRefresh: forceRefresh);
+      if (!mounted) return;
+      setState(() {
+        _bids = page.items;
+        _hasMore = page.hasMore;
+        _nextOffset = page.nextOffset;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadingMore = false;
+        _error = ErrorHandler.getMessage(error);
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _fetchPage(offset: _nextOffset);
+      if (!mounted) return;
+      setState(() {
+        _bids = [..._bids, ...page.items];
+        _hasMore = page.hasMore;
+        _nextOffset = page.nextOffset;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _error = ErrorHandler.getMessage(error);
+      });
+    }
+  }
+
+  Future<_PagedBids> _fetchPage({
+    required int offset,
+    bool forceRefresh = false,
+  }) async {
+    final data = await BackendHttp.request(
+      path: '/api/bids/me?limit=$_pageSize&offset=$offset',
+      cacheTtl: const Duration(seconds: 20),
+      forceRefresh: forceRefresh,
+    );
+    final items = ((data['bids'] as List?) ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    final pagination =
+        data['pagination'] as Map<String, dynamic>? ??
+        const <String, dynamic>{};
+    return _PagedBids(
+      items: items,
+      hasMore: pagination['hasMore'] == true,
+      nextOffset:
+          (pagination['nextOffset'] as num?)?.toInt() ??
+          (offset + items.length),
+    );
   }
 
   Future<void> _deleteBid(String bidId, String threadId) async {
@@ -60,71 +155,23 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
 
     try {
       await FirestoreService().deleteBid(threadId: threadId, bidId: bidId);
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context).tr('bidWithdrawn')),
         ),
       );
-      await _reload(forceRefresh: true);
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${AppLocalizations.of(context).tr('error')}: ${ErrorHandler.getMessage(e)}',
-          ),
-        ),
-      );
+      await _load(forceRefresh: true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(ErrorHandler.getMessage(error))));
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchBids({
-    bool forceRefresh = false,
-  }) async {
-    final data = await BackendHttp.request(
-      path: '/api/bids/me',
-      cacheTtl: const Duration(seconds: 20),
-      forceRefresh: forceRefresh,
-    );
-    return (data['bids'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .toList();
-  }
-
-  ThreadMessage _threadToMessage(Map<String, dynamic> thread) {
-    final createdRaw = thread['createdAt']?.toString();
-    final createdAt = createdRaw == null
-        ? DateTime.now()
-        : DateTime.tryParse(createdRaw) ?? DateTime.now();
-
-    return ThreadMessage(
-      id: (thread['id'] ?? '').toString(),
-      docId: (thread['id'] ?? '').toString(),
-      senderName: 'Load Owner',
-      senderProfileImageUrl: '',
-      ownerId: (thread['ownerId'] ?? '').toString(),
-      message: (thread['message'] ?? '').toString(),
-      timestamp: createdAt,
-      likes: const [],
-      comments: const [],
-      weight: (thread['weight'] as num?)?.toDouble() ?? 0.0,
-      type: (thread['type'] ?? '').toString(),
-      start: (thread['start'] ?? '').toString(),
-      end: (thread['end'] ?? '').toString(),
-      packaging: (thread['packaging'] ?? '').toString(),
-      weightUnit: (thread['weightUnit'] ?? 'kg').toString(),
-      startLat: (thread['startLat'] as num?)?.toDouble() ?? 0.0,
-      startLng: (thread['startLng'] as num?)?.toDouble() ?? 0.0,
-      endLat: (thread['endLat'] as num?)?.toDouble() ?? 0.0,
-      endLng: (thread['endLng'] as num?)?.toDouble() ?? 0.0,
-      deliveryStatus: thread['deliveryStatus']?.toString(),
-    );
-  }
+  ThreadMessage _threadToMessage(Map<String, dynamic> thread) =>
+      ThreadMessage.fromApiMap(thread);
 
   String _statusLabel(String status) {
     switch (status.toLowerCase()) {
@@ -159,24 +206,13 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
   }
 
   String _relativeTime(String? raw) {
-    if (raw == null || raw.isEmpty) {
-      return 'Just now';
-    }
+    if (raw == null || raw.isEmpty) return 'Just now';
     final date = DateTime.tryParse(raw);
-    if (date == null) {
-      return 'Just now';
-    }
-
+    if (date == null) return 'Just now';
     final diff = DateTime.now().difference(date);
-    if (diff.inMinutes < 1) {
-      return 'Just now';
-    }
-    if (diff.inHours < 1) {
-      return '${diff.inMinutes}m ago';
-    }
-    if (diff.inDays < 1) {
-      return '${diff.inHours}h ago';
-    }
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
   }
 
@@ -185,6 +221,13 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
     final localizations = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final pendingCount = _bids.where((bid) {
+      return (bid['status'] ?? 'pending').toString().toLowerCase() == 'pending';
+    }).length;
+    final wonCount = _bids.where((bid) {
+      final status = (bid['status'] ?? 'pending').toString().toLowerCase();
+      return status == 'accepted' || status == 'completed';
+    }).length;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -193,17 +236,13 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
         actions: [
           IconButton(
             tooltip: localizations.tr('refresh'),
-            onPressed: () => _reload(forceRefresh: true),
+            onPressed: () => _load(forceRefresh: true),
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _bidsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return ListView(
+      body: _loading
+          ? ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: const [
                 _LoadingPanel(height: 176),
@@ -212,145 +251,155 @@ class _MyBidsScreenState extends State<MyBidsScreen> {
                 SizedBox(height: 12),
                 _LoadingPanel(height: 160),
               ],
-            );
-          }
-
-          if (snapshot.hasError) {
-            return _BidsStateView(
+            )
+          : _error != null
+          ? _BidsStateView(
               icon: Icons.cloud_off_rounded,
               title: 'Could not load your bids',
-              subtitle: ErrorHandler.getMessage(snapshot.error!),
+              subtitle: _error!,
               primaryLabel: localizations.tr('retry'),
-              onPrimaryTap: () => _reload(forceRefresh: true),
-            );
-          }
-
-          final bids = snapshot.data ?? const <Map<String, dynamic>>[];
-          final pendingCount = bids.where((bid) {
-            return (bid['status'] ?? 'pending').toString().toLowerCase() ==
-                'pending';
-          }).length;
-          final activeCount = bids.where((bid) {
-            final status = (bid['status'] ?? 'pending')
-                .toString()
-                .toLowerCase();
-            return status == 'accepted' || status == 'completed';
-          }).length;
-
-          return RefreshIndicator(
-            onRefresh: () => _reload(forceRefresh: true),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: isDark
-                        ? AppPalette.heroGradientDark
-                        : AppPalette.heroGradient,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        localizations.tr('myBids'),
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Track every offer, keep pending bids in view, and jump back into the right load without hunting through the feed.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _HeroStat(
-                            label: 'Total bids',
-                            value: '${bids.length}',
-                          ),
-                          _HeroStat(label: 'Pending', value: '$pendingCount'),
-                          _HeroStat(label: 'Won', value: '$activeCount'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (bids.isEmpty)
-                  _BidsStateView(
-                    icon: Icons.local_offer_outlined,
-                    title: localizations.tr('noBidsPlacedYet'),
-                    subtitle:
-                        'Your bids will show up here with status, route details, and quick actions.',
-                  )
-                else
-                  ...bids.map((bid) {
-                    final bidId = (bid['id'] ?? '').toString();
-                    final thread =
-                        (bid['load'] as Map<String, dynamic>? ??
-                        const <String, dynamic>{});
-                    final amount = (bid['amount'] as num?)?.toDouble() ?? 0.0;
-                    final currency = (bid['currency'] ?? 'Birr').toString();
-                    final status = (bid['status'] ?? 'pending').toString();
-                    final threadId = (thread['id'] ?? '').toString();
-                    final threadMessage = _threadToMessage(thread);
-                    final weight = formatWeight(
-                      threadMessage.weight,
-                      threadMessage.weightUnit,
-                    );
-
+              onPrimaryTap: () => _load(forceRefresh: true),
+            )
+          : RefreshIndicator(
+              onRefresh: () => _load(forceRefresh: true),
+              child: ListView.builder(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                itemCount: _bids.length + (_loadingMore ? 2 : 1),
+                itemBuilder: (context, index) {
+                  if (index == 0) {
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _BidCard(
-                        title: threadMessage.message.trim().isEmpty
-                            ? '${threadMessage.start} -> ${threadMessage.end}'
-                            : threadMessage.message,
-                        start: threadMessage.start,
-                        end: threadMessage.end,
-                        amount: formatPrice(amount, currency),
-                        statusLabel: _statusLabel(status),
-                        statusColor: _statusColor(status),
-                        meta: [
-                          if (threadMessage.type.isNotEmpty) threadMessage.type,
-                          if (threadMessage.packaging.isNotEmpty)
-                            threadMessage.packaging,
-                          if (threadMessage.weight > 0) weight,
-                          'Updated ${_relativeTime(bid['createdAt']?.toString())}',
-                        ],
-                        onOpen: threadId.isEmpty
-                            ? null
-                            : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CommentScreen(
-                                      threadId: threadId,
-                                      message: threadMessage,
-                                    ),
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              gradient: isDark
+                                  ? AppPalette.heroGradientDark
+                                  : AppPalette.heroGradient,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  localizations.tr('myBids'),
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Track every offer, keep pending bids in view, and reopen the right load without hunting through the feed.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white70,
+                                    height: 1.4,
                                   ),
-                                );
-                              },
-                        onWithdraw: status.toLowerCase() == 'pending'
-                            ? () => _deleteBid(bidId, threadId)
-                            : null,
+                                ),
+                                const SizedBox(height: 14),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [
+                                    _HeroStat(
+                                      label: 'Total bids',
+                                      value: '${_bids.length}',
+                                    ),
+                                    _HeroStat(
+                                      label: 'Pending',
+                                      value: '$pendingCount',
+                                    ),
+                                    _HeroStat(label: 'Won', value: '$wonCount'),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_bids.isEmpty) ...[
+                            const SizedBox(height: 16),
+                            _BidsStateView(
+                              icon: Icons.local_offer_outlined,
+                              title: localizations.tr('noBidsPlacedYet'),
+                              subtitle:
+                                  'Your bids will show up here with status, route details, and quick actions.',
+                            ),
+                          ],
+                        ],
                       ),
                     );
-                  }),
-              ],
+                  }
+
+                  final itemIndex = index - 1;
+                  if (itemIndex >= _bids.length) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
+                  final bid = _bids[itemIndex];
+                  final bidId = (bid['id'] ?? '').toString();
+                  final thread =
+                      (bid['load'] as Map<String, dynamic>? ??
+                      const <String, dynamic>{});
+                  final amount = (bid['amount'] as num?)?.toDouble() ?? 0.0;
+                  final currency = (bid['currency'] ?? 'Birr').toString();
+                  final status = (bid['status'] ?? 'pending').toString();
+                  final threadId = (thread['id'] ?? '').toString();
+                  final threadMessage = _threadToMessage(thread);
+                  final weight = formatWeight(
+                    threadMessage.weight,
+                    threadMessage.weightUnit,
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _BidCard(
+                      title: threadMessage.message.trim().isEmpty
+                          ? '${threadMessage.start} -> ${threadMessage.end}'
+                          : threadMessage.message,
+                      start: threadMessage.start,
+                      end: threadMessage.end,
+                      amount: formatPrice(amount, currency),
+                      statusLabel: _statusLabel(status),
+                      statusColor: _statusColor(status),
+                      meta: [
+                        if (threadMessage.type.isNotEmpty ||
+                            threadMessage.category.isNotEmpty)
+                          displayLoadType(
+                            category: threadMessage.category,
+                            subtype: threadMessage.type,
+                          ),
+                        if (threadMessage.packaging.isNotEmpty)
+                          threadMessage.packaging,
+                        if (threadMessage.weight > 0) weight,
+                        'Updated ${_relativeTime(bid['createdAt']?.toString())}',
+                      ],
+                      onOpen: threadId.isEmpty
+                          ? null
+                          : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CommentScreen(
+                                    threadId: threadId,
+                                    message: threadMessage,
+                                  ),
+                                ),
+                              );
+                            },
+                      onWithdraw: status.toLowerCase() == 'pending'
+                          ? () => _deleteBid(bidId, threadId)
+                          : null,
+                    ),
+                  );
+                },
+              ),
             ),
-          );
-        },
-      ),
     );
   }
 }
@@ -685,4 +734,16 @@ class _LoadingPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PagedBids {
+  final List<Map<String, dynamic>> items;
+  final bool hasMore;
+  final int nextOffset;
+
+  const _PagedBids({
+    required this.items,
+    required this.hasMore,
+    required this.nextOffset,
+  });
 }

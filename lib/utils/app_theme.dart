@@ -23,7 +23,7 @@ class AppPalette {
   static const Color darkTextSoft = Color(0xFFA5B5BD);
 
   static const LinearGradient heroGradient = LinearGradient(
-    colors: [Color(0xFF4A6A6B), Color(0xFF657B6D), Color(0xFF967357)],
+    colors: [Color(0xFF9ED18E), Color(0xFF657B6D), Color(0xFF9ED18E)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );

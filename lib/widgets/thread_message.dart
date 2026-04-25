@@ -6,6 +6,7 @@ import '../model/thread_message.dart';
 import '../utils/app_theme.dart';
 import '../utils/delivery_status.dart';
 import '../utils/formatters.dart';
+import '../utils/load_categories.dart';
 import 'profile_avatar.dart';
 
 class ThreadMessageWidget extends StatelessWidget {
@@ -54,21 +55,21 @@ class ThreadMessageWidget extends StatelessWidget {
         : (isDark ? const Color(0xFF243247) : const Color(0xFFE5E7EB));
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 5),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor, width: isOwnLoad ? 1.4 : 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha((0.05 * 255).round()),
-            blurRadius: 20,
-            offset: const Offset(0, 12),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(11, 11, 11, 11),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -78,22 +79,22 @@ class ThreadMessageWidget extends StatelessWidget {
                   GestureDetector(
                     onTap: onProfileTap,
                     child: ProfileAvatar(
-                      radius: 18,
+                      radius: 16,
                       imageUrl: message.senderProfileImageUrl,
                     ),
                   )
                 else
                   ProfileAvatar(
-                    radius: 18,
+                    radius: 16,
                     imageUrl: message.senderProfileImageUrl,
                   ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 if (isOwnLoad) ...[
                   Container(
-                    margin: const EdgeInsets.only(right: 10),
+                    margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                      horizontal: 9,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
                       color: isDark
@@ -104,7 +105,7 @@ class ThreadMessageWidget extends StatelessWidget {
                     child: Text(
                       'Your load',
                       style: GoogleFonts.manrope(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                         color: isDark
                             ? const Color(0xFFF4E7CF)
@@ -121,7 +122,7 @@ class ThreadMessageWidget extends StatelessWidget {
                         senderName,
                         style: GoogleFonts.spaceGrotesk(
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 12.5,
                           color: isDark
                               ? const Color(0xFFE5EEF8)
                               : const Color(0xFF0F172A),
@@ -131,7 +132,7 @@ class ThreadMessageWidget extends StatelessWidget {
                       Text(
                         '${localizations.tr('lastUpdated')} - $relativeTime',
                         style: GoogleFonts.manrope(
-                          fontSize: 11,
+                          fontSize: 10,
                           color: isDark
                               ? const Color(0xFF94A3B8)
                               : Colors.grey.shade600,
@@ -142,7 +143,7 @@ class ThreadMessageWidget extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
+                    horizontal: 9,
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
@@ -153,21 +154,21 @@ class ThreadMessageWidget extends StatelessWidget {
                     statusLabel,
                     style: GoogleFonts.manrope(
                       color: statusColor,
-                      fontSize: 11,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
                 color: isDark
                     ? const Color(0xFF101B2D)
                     : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: isDark
                       ? const Color(0xFF243247)
@@ -190,7 +191,7 @@ class ThreadMessageWidget extends StatelessWidget {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
                         child: _RouteConnector(isDark: isDark),
                       ),
                       Expanded(
@@ -208,7 +209,7 @@ class ThreadMessageWidget extends StatelessWidget {
               ),
             ),
             if (message.message.trim().isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 7),
               Text(
                 message.message,
                 maxLines: 2,
@@ -217,14 +218,15 @@ class ThreadMessageWidget extends StatelessWidget {
                   color: isDark
                       ? const Color(0xFFCBD5E1)
                       : Colors.grey.shade700,
-                  fontSize: 13,
+                  fontSize: 11.5,
+                  height: 1.3,
                 ),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 5,
+              runSpacing: 5,
               children: [
                 _tag(
                   isDark: isDark,
@@ -234,9 +236,10 @@ class ThreadMessageWidget extends StatelessWidget {
                 _tag(
                   isDark: isDark,
                   icon: Icons.category_outlined,
-                  label: message.type.isEmpty
-                      ? localizations.tr('searchGeneral')
-                      : message.type,
+                  label: displayLoadType(
+                    category: message.category,
+                    subtype: message.type,
+                  ),
                 ),
                 if (message.packaging.isNotEmpty)
                   _tag(
@@ -246,17 +249,9 @@ class ThreadMessageWidget extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Icon(
-                  Icons.touch_app_outlined,
-                  size: 16,
-                  color: isDark
-                      ? AppPalette.darkTextSoft
-                      : Colors.grey.shade500,
-                ),
-                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     localizations.tr('tapForDetails'),
@@ -264,7 +259,7 @@ class ThreadMessageWidget extends StatelessWidget {
                       color: isDark
                           ? AppPalette.darkTextSoft
                           : Colors.grey.shade600,
-                      fontSize: 12,
+                      fontSize: 10.5,
                     ),
                   ),
                 ),
@@ -277,11 +272,11 @@ class ThreadMessageWidget extends StatelessWidget {
                       backgroundColor: const Color(0xFF0EA5E9),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
+                        horizontal: 11,
+                        vertical: 8,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(9),
                       ),
                       elevation: 0,
                     ),
@@ -289,8 +284,8 @@ class ThreadMessageWidget extends StatelessWidget {
                 else if (showBidStatusWhenHidden)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                      horizontal: 10,
+                      vertical: 7,
                     ),
                     decoration: BoxDecoration(
                       color: isDark
@@ -307,7 +302,7 @@ class ThreadMessageWidget extends StatelessWidget {
                       localizations.tr('bidAlreadyPlaced'),
                       style: GoogleFonts.manrope(
                         color: Colors.green.shade700,
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -360,10 +355,10 @@ class ThreadMessageWidget extends StatelessWidget {
     required String label,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF101B2D) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
         ),
@@ -373,14 +368,14 @@ class ThreadMessageWidget extends StatelessWidget {
         children: [
           Icon(
             icon,
-            size: 14,
+            size: 13,
             color: isDark ? const Color(0xFF94A3B8) : Colors.blueGrey,
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: GoogleFonts.manrope(
-              fontSize: 12,
+              fontSize: 10.5,
               fontWeight: FontWeight.w600,
               color: isDark ? const Color(0xFFE5EEF8) : const Color(0xFF334155),
             ),
@@ -410,10 +405,10 @@ class _RouteStopCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF142033) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: isDark ? const Color(0xFF243247) : const Color(0xFFE2E8F0),
         ),
@@ -425,20 +420,20 @@ class _RouteStopCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 22,
+                height: 22,
                 decoration: BoxDecoration(
                   color: color.withAlpha((0.14 * 255).round()),
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(7),
                 ),
-                child: Icon(icon, size: 16, color: color),
+                child: Icon(icon, size: 13, color: color),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   label,
                   style: GoogleFonts.manrope(
-                    fontSize: 11,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.w700,
                     color: isDark
                         ? AppPalette.darkTextSoft
@@ -448,14 +443,14 @@ class _RouteStopCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
             value,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.spaceGrotesk(
               fontWeight: FontWeight.w700,
-              fontSize: 14,
+              fontSize: 12.5,
               height: 1.2,
               color: isDark ? const Color(0xFFE5EEF8) : const Color(0xFF0F172A),
             ),
@@ -481,7 +476,7 @@ class _RouteConnector extends StatelessWidget {
         : const Color(0xFF64748B);
 
     return SizedBox(
-      width: 34,
+      width: 28,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -492,9 +487,9 @@ class _RouteConnector extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(height: 6),
-          Icon(Icons.arrow_forward_rounded, size: 18, color: arrowColor),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
+          Icon(Icons.arrow_forward_rounded, size: 16, color: arrowColor),
+          const SizedBox(height: 4),
           Container(
             height: 1.5,
             decoration: BoxDecoration(

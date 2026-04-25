@@ -1,24 +1,21 @@
-import 'dart:io';
+import 'backend_transport.dart';
 
 class ErrorHandler {
   static String getMessage(Object error) {
-    String message = error.toString();
-
-    if (error is SocketException) {
-      final socketMessage = error.message.toLowerCase();
-      if (socketMessage.contains('connection refused') ||
-          socketMessage.contains('connection failed') ||
-          socketMessage.contains('network is unreachable') ||
-          socketMessage.contains('failed host lookup')) {
-        return 'Could not reach the server. Please try again in a moment.';
+    if (error is BackendRequestException) {
+      final code = (error.payload?['code'] ?? '').toString();
+      if (code == 'ENDPOINT_UNAVAILABLE') {
+        return 'This feature preview is visible, but the connected backend does not support the live data route yet.';
       }
-      return 'No internet connection. Please check your network.';
+      return error.message;
     }
 
+    final message = error.toString();
     final lowerMessage = message.toLowerCase();
 
     if (lowerMessage.contains('connection refused') ||
         lowerMessage.contains('connection failed') ||
+        lowerMessage.contains('network is unreachable') ||
         lowerMessage.contains('failed host lookup')) {
       return 'Could not reach the server. Please try again in a moment.';
     }
@@ -43,11 +40,6 @@ class ErrorHandler {
       return 'Server error. Please try again later.';
     }
 
-    if (message.contains('Connection refused')) {
-      return 'Could not connect to server.';
-    }
-
-    // Clean up common prefix
     return message.replaceFirst('Exception: ', '');
   }
 }

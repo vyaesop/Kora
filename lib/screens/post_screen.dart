@@ -5,6 +5,7 @@ import '../utils/app_theme.dart';
 import '../utils/backend_http.dart';
 import '../utils/ethiopia_locations.dart';
 import '../utils/error_handler.dart';
+import '../utils/load_categories.dart';
 import '../utils/notification_helper.dart';
 import '../utils/verification_access.dart';
 import 'profile_screen.dart';
@@ -28,20 +29,10 @@ class _PostScreenState extends State<PostScreen> {
   EthiopiaCityOption? _startLocation;
   EthiopiaCityOption? _endLocation;
 
-  String _type = 'General';
+  String? _category;
+  String? _type;
   String _weightUnit = 'kg';
   bool _submitting = false;
-
-  final _types = const [
-    'General',
-    'Coffee',
-    'Fuel',
-    'Food',
-    'Fertilizer',
-    'Construction Materials',
-    'Heavy Machinery',
-    'Livestock',
-  ];
   final _units = const [
     'kg',
     'ton',
@@ -60,6 +51,8 @@ class _PostScreenState extends State<PostScreen> {
     _packagingController.dispose();
     super.dispose();
   }
+
+  List<String> get _subcategoryOptions => subcategoriesFor(_category);
 
   Future<void> _pickCity({required bool isStart}) async {
     final selected = await showModalBottomSheet<EthiopiaCityOption>(
@@ -131,6 +124,7 @@ class _PostScreenState extends State<PostScreen> {
         body: {
           'message': _messageController.text.trim(),
           'weight': weight,
+          'category': _category,
           'type': _type,
           'start': _startLocation!.city,
           'end': _endLocation!.city,
@@ -223,22 +217,6 @@ class _PostScreenState extends State<PostScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                TextFormField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    labelText: localizations.tr('loadDescription'),
-                    prefixIcon: const Icon(Icons.notes_outlined),
-                  ),
-                  minLines: 2,
-                  maxLines: 4,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Description is required';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -283,17 +261,51 @@ class _PostScreenState extends State<PostScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _type,
+                  value: _category,
                   decoration: InputDecoration(
-                    labelText: localizations.tr('loadType'),
+                    labelText: 'Category',
                     prefixIcon: const Icon(Icons.category_outlined),
                   ),
-                  items: _types
-                      .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                  items: loadCategoryCatalog
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item.category,
+                          child: Text(item.category),
+                        ),
+                      )
                       .toList(),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Required' : null,
                   onChanged: (value) {
-                    if (value != null) setState(() => _type = value);
+                    setState(() {
+                      _category = value;
+                      _type = null;
+                    });
                   },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _subcategoryOptions.contains(_type) ? _type : null,
+                  decoration: InputDecoration(
+                    labelText: 'Load type',
+                    prefixIcon: const Icon(Icons.tune_rounded),
+                    helperText: _category == null
+                        ? 'Choose a broad category first.'
+                        : 'Pick the specific load inside $_category.',
+                  ),
+                  items: _subcategoryOptions
+                      .map(
+                        (item) =>
+                            DropdownMenuItem(value: item, child: Text(item)),
+                      )
+                      .toList(),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Required' : null,
+                  onChanged: _category == null
+                      ? null
+                      : (value) {
+                          setState(() => _type = value);
+                        },
                 ),
                 const SizedBox(height: 16),
                 _CityField(
@@ -371,6 +383,19 @@ class _PostScreenState extends State<PostScreen> {
                     labelText: localizations.tr('packaging'),
                     prefixIcon: const Icon(Icons.inventory_2_outlined),
                   ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _messageController,
+                  decoration: InputDecoration(
+                    labelText:
+                        '${localizations.tr('loadDescription')} (optional)',
+                    prefixIcon: const Icon(Icons.notes_outlined),
+                    helperText:
+                        'Optional shipment notes for handling, timing, or special instructions.',
+                  ),
+                  minLines: 2,
+                  maxLines: 4,
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(

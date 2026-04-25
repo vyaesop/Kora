@@ -2,16 +2,14 @@ import 'dart:convert';
 
 class ThreadMessage {
   final String id;
-  final String docId;
   final String senderName;
   final String senderProfileImageUrl;
   final String ownerId;
   final String message;
   final DateTime timestamp;
-  final List<dynamic> likes;
-  final List<dynamic> comments;
   final double weight;
   final String type;
+  final String category;
   final String start;
   final String end;
   final String packaging;
@@ -24,16 +22,14 @@ class ThreadMessage {
 
   const ThreadMessage({
     required this.id,
-    required this.docId,
     required this.senderName,
     required this.senderProfileImageUrl,
     required this.ownerId,
     required this.message,
     required this.timestamp,
-    required this.likes,
-    required this.comments,
     required this.weight,
     required this.type,
+    required this.category,
     required this.start,
     required this.end,
     required this.packaging,
@@ -48,16 +44,14 @@ class ThreadMessage {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'id': id,
-      'docId': docId,
       'senderName': senderName,
       'senderProfileImageUrl': senderProfileImageUrl,
       'ownerId': ownerId,
       'message': message,
       'timestamp': timestamp.toIso8601String(),
-      'likes': likes,
-      'comments': comments,
       'weight': weight,
       'type': type,
+      'category': category,
       'start': start,
       'end': end,
       'packaging': packaging,
@@ -70,10 +64,41 @@ class ThreadMessage {
     };
   }
 
+  factory ThreadMessage.fromApiMap(Map<String, dynamic> row) {
+    final owner = row['owner'] is Map<String, dynamic>
+        ? row['owner'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return ThreadMessage(
+      id: (row['id'] ?? '').toString(),
+      senderName: (owner['name'] ?? row['senderName'] ?? 'Unknown').toString(),
+      senderProfileImageUrl:
+          (owner['profileImageUrl'] ?? row['senderProfileImageUrl'] ?? '')
+              .toString(),
+      ownerId: (row['ownerId'] ?? owner['id'] ?? '').toString(),
+      message: (row['message'] ?? '').toString(),
+      timestamp:
+          DateTime.tryParse(
+            (row['createdAt'] ?? row['timestamp'] ?? '').toString(),
+          ) ??
+          DateTime.now(),
+      weight: (row['weight'] as num?)?.toDouble() ?? 0,
+      type: (row['type'] ?? '').toString(),
+      category: (row['category'] ?? '').toString(),
+      start: (row['start'] ?? '').toString(),
+      end: (row['end'] ?? '').toString(),
+      packaging: (row['packaging'] ?? '').toString(),
+      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
+      startLat: (row['startLat'] as num?)?.toDouble() ?? 0,
+      startLng: (row['startLng'] as num?)?.toDouble() ?? 0,
+      endLat: (row['endLat'] as num?)?.toDouble() ?? 0,
+      endLng: (row['endLng'] as num?)?.toDouble() ?? 0,
+      deliveryStatus: row['deliveryStatus']?.toString(),
+    );
+  }
+
   factory ThreadMessage.fromMap(Map<String, dynamic> map) {
     return ThreadMessage(
-      id: (map['id'] ?? '').toString(),
-      docId: (map['docId'] ?? map['id'] ?? '').toString(),
+      id: (map['id'] ?? map['docId'] ?? '').toString(),
       senderName: (map['senderName'] ?? map['sender'] ?? '').toString(),
       senderProfileImageUrl: (map['senderProfileImageUrl'] ?? '').toString(),
       ownerId: (map['ownerId'] ?? '').toString(),
@@ -81,10 +106,9 @@ class ThreadMessage {
       timestamp:
           DateTime.tryParse((map['timestamp'] ?? '').toString()) ??
           DateTime.now(),
-      likes: List<dynamic>.from(map['likes'] ?? const []),
-      comments: List<dynamic>.from(map['comments'] ?? const []),
       weight: (map['weight'] as num?)?.toDouble() ?? 0,
       type: (map['type'] ?? '').toString(),
+      category: (map['category'] ?? '').toString(),
       start: (map['start'] ?? '').toString(),
       end: (map['end'] ?? '').toString(),
       packaging: (map['packaging'] ?? '').toString(),

@@ -1,84 +1,181 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter/foundation.dart';
 
-import 'backend_auth_service.dart';
-import 'backend_config.dart';
+import 'backend_http.dart';
 import 'ethiopia_locations.dart';
 import 'session_preferences.dart';
 
 class DriverLocationService {
   final String driverId;
   StreamSubscription<Position>? _positionStream;
-  final BackendAuthService _authService = BackendAuthService();
   String? _lastCity;
 
   DriverLocationService(this.driverId);
 
-  void start() async {
-    LocationPermission permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied || permission == LocationPermission.unableToDetermine) {
-      debugPrint('Location permission denied.');
-      return;
-    }
-    if (permission == LocationPermission.deniedForever) {
-      debugPrint('Location permission denied forever.');
-      return;
-    }
-
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 50,
-      ),
-    ).listen((Position position) async {
-      try {
-        final match = findNearestEthiopiaCity(
-          latitude: position.latitude,
-          longitude: position.longitude,
-        );
-        final cityName = match?.city.city;
-        if (cityName != null && cityName.isNotEmpty && cityName != _lastCity) {
-          _lastCity = cityName;
-          await SessionPreferences.saveDriverCity(cityName);
-        }
-
-        final token = await _authService.getToken();
-        if (token == null || token.isEmpty) {
-          debugPrint('Driver location upload skipped: no auth token');
-          return;
-        }
-
-        final uri = Uri.parse('${BackendConfig.baseUrl}/api/drivers/$driverId/location');
-        final client = HttpClient();
-        try {
-          final req = await client.openUrl('PUT', uri);
-          req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-          req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-          req.add(
-            utf8.encode(
-              jsonEncode({
-                'latitude': position.latitude,
-                'longitude': position.longitude,
-              }),
+  static Future<bool> ensureCriticalLocationAccess(BuildContext context) async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!context.mounted) return false;
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Location required'),
+          content: const Text(
+            'Drivers need precise location access so Kora can show nearby loads, live tracking, and route-based suggestions. Please turn location services on to continue.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Not now'),
             ),
-          );
-          final res = await req.close();
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            debugPrint('Driver location upload failed with status ${res.statusCode}');
-          }
-        } finally {
-          client.close(force: true);
-        }
-      } catch (error) {
-        debugPrint('Driver location upload error: $error');
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Open settings'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await Geolocator.openLocationSettings();
       }
-    }, onError: (Object error) {
-      debugPrint('Driver location stream error: $error');
-    });
+      return false;
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.unableToDetermine) {
+      if (!context.mounted) return false;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Allow precise location'),
+          content: const Text(
+            'Location is essential for drivers on Kora. We use it for nearby load discovery, return-load suggestions, and shipment tracking for cargo owners.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (!context.mounted) return false;
+      final openAppSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Location blocked'),
+          content: const Text(
+            'Location permission was permanently denied. Please open app settings and allow precise location for Kora to work properly for drivers.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Open app settings'),
+            ),
+          ],
+        ),
+      );
+      if (openAppSettings == true) {
+        await Geolocator.openAppSettings();
+      }
+      return false;
+    }
+
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
+  static Future<String?> getCurrentDriverCity({
+    Duration timeLimit = const Duration(seconds: 6),
+  }) async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return await SessionPreferences.getDriverCity();
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      ).timeout(timeLimit);
+
+      final match = findNearestEthiopiaCity(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      final city = match?.city.city;
+      if (city != null && city.isNotEmpty) {
+        await SessionPreferences.saveDriverCity(city);
+      }
+      return city ?? await SessionPreferences.getDriverCity();
+    } catch (_) {
+      return await SessionPreferences.getDriverCity();
+    }
+  }
+
+  Future<void> start() async {
+    final permission = await Geolocator.checkPermission();
+    if (permission != LocationPermission.always &&
+        permission != LocationPermission.whileInUse) {
+      debugPrint('Driver location stream not started: permission missing.');
+      return;
+    }
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      debugPrint(
+        'Driver location stream not started: location services disabled.',
+      );
+      return;
+    }
+
+    await _positionStream?.cancel();
+    _positionStream =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 50,
+          ),
+        ).listen(
+          (Position position) async {
+            try {
+              final match = findNearestEthiopiaCity(
+                latitude: position.latitude,
+                longitude: position.longitude,
+              );
+              final cityName = match?.city.city;
+              if (cityName != null &&
+                  cityName.isNotEmpty &&
+                  cityName != _lastCity) {
+                _lastCity = cityName;
+                await SessionPreferences.saveDriverCity(cityName);
+              }
+
+              await BackendHttp.request(
+                path: '/api/drivers/$driverId/location',
+                method: 'PUT',
+                body: {
+                  'latitude': position.latitude,
+                  'longitude': position.longitude,
+                },
+              );
+            } catch (error) {
+              debugPrint('Driver location upload error: $error');
+            }
+          },
+          onError: (Object error) {
+            debugPrint('Driver location stream error: $error');
+          },
+        );
   }
 
   void stop() {

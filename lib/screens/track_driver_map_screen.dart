@@ -60,8 +60,12 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
 
   DriverLocationSnapshot _parseLocation(Map<String, dynamic>? map) {
     if (map == null) return const DriverLocationSnapshot();
-    final lat = (map['latitude'] as num?)?.toDouble();
-    final lng = (map['longitude'] as num?)?.toDouble();
+    final lat =
+        (map['latitude'] as num?)?.toDouble() ??
+        (map['lat'] as num?)?.toDouble();
+    final lng =
+        (map['longitude'] as num?)?.toDouble() ??
+        (map['lng'] as num?)?.toDouble();
     final updatedAtRaw = map['updatedAt']?.toString();
     final updatedAt = updatedAtRaw == null ? null : DateTime.tryParse(updatedAtRaw);
     if (lat == null || lng == null) return const DriverLocationSnapshot();
@@ -108,11 +112,11 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
       final responses = await Future.wait([
         BackendHttp.request(
           path: '/api/drivers/${widget.driverId}/location',
-          forceRefresh: true,
+          cacheTtl: const Duration(minutes: 2),
         ),
         BackendHttp.request(
           path: '/api/threads/${widget.loadId}',
-          forceRefresh: true,
+          cacheTtl: const Duration(minutes: 5),
         ),
       ]);
       final locationData = responses[0];

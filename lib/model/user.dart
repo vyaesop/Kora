@@ -39,8 +39,8 @@ class UserModel {
     required this.id,
     required this.name,
     required this.username,
-    required this.followers,
-    required this.following,
+    this.followers = const [],
+    this.following = const [],
     this.profileImageUrl,
     this.bio,
     this.link,
@@ -109,8 +109,8 @@ class UserModel {
           : null,
       bio: map['bio'] != null ? map['bio'] as String : null,
       link: map['link'] != null ? map['link'] as String : null,
-      followers: List.from((map['followers'] as List)),
-      following: List.from((map['following'] as List)),
+      followers: map['followers'] is List ? List.from(map['followers'] as List) : const [],
+      following: map['following'] is List ? List.from(map['following'] as List) : const [],
       userType: map['userType'] as String, // Extract userType
       truckType: map['truckType'] != null ? map['truckType'] as String : null,
       licensePlate: map['licensePlate'] != null

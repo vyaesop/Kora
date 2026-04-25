@@ -3,11 +3,14 @@ import 'package:kora/app_localizations.dart';
 import 'package:kora/model/thread_message.dart';
 import 'package:kora/model/user.dart';
 import 'package:kora/screens/comment_screen.dart';
+import 'package:kora/screens/notifications_screen.dart';
+import 'package:kora/screens/wallet_screen.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_http.dart';
 import 'package:kora/utils/delivery_status.dart';
 import 'package:kora/utils/formatters.dart';
 import 'package:kora/utils/verification_access.dart';
+import 'package:kora/widgets/activity_action_buttons.dart';
 import 'package:kora/widgets/language_switcher.dart';
 
 class PreFeedCargoScreen extends StatefulWidget {
@@ -64,38 +67,8 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
         .toList();
   }
 
-  ThreadMessage _threadMessageFromMap(Map<String, dynamic> row) {
-    final owner = row['owner'] as Map<String, dynamic>? ?? const {};
-    final createdRaw = row['createdAt']?.toString();
-    final createdAt = createdRaw == null
-        ? DateTime.now()
-        : DateTime.tryParse(createdRaw) ?? DateTime.now();
-
-    return ThreadMessage(
-      id: (row['id'] ?? '').toString(),
-      docId: (row['id'] ?? '').toString(),
-      senderName: (owner['name'] ?? widget.user.name).toString(),
-      senderProfileImageUrl:
-          (owner['profileImageUrl'] ?? widget.user.profileImageUrl ?? '')
-              .toString(),
-      ownerId: (row['ownerId'] ?? owner['id'] ?? widget.user.id).toString(),
-      message: (row['message'] ?? '').toString(),
-      timestamp: createdAt,
-      likes: const [],
-      comments: const [],
-      weight: (row['weight'] as num?)?.toDouble() ?? 0.0,
-      type: (row['type'] ?? '').toString(),
-      start: (row['start'] ?? '').toString(),
-      end: (row['end'] ?? '').toString(),
-      packaging: (row['packaging'] ?? '').toString(),
-      weightUnit: (row['weightUnit'] ?? 'kg').toString(),
-      startLat: (row['startLat'] as num?)?.toDouble() ?? 0.0,
-      startLng: (row['startLng'] as num?)?.toDouble() ?? 0.0,
-      endLat: (row['endLat'] as num?)?.toDouble() ?? 0.0,
-      endLng: (row['endLng'] as num?)?.toDouble() ?? 0.0,
-      deliveryStatus: row['deliveryStatus']?.toString(),
-    );
-  }
+  ThreadMessage _threadMessageFromMap(Map<String, dynamic> row) =>
+      ThreadMessage.fromApiMap(row);
 
   void _openLoadDetails(BuildContext context, Map<String, dynamic> row) {
     final threadId = (row['id'] ?? '').toString();
@@ -128,6 +101,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                 '${localizations.tr('welcome')}, ${widget.user.name}',
               ),
               actions: const [
+                ActivityActionButtons(),
                 Padding(
                   padding: EdgeInsets.only(right: 12),
                   child: LanguageSwitcher(),
@@ -150,6 +124,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                             ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
+                    const ActivityActionButtons(),
                     const LanguageSwitcher(),
                   ],
                 ),
@@ -157,9 +132,9 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
               ],
               _DashboardHero(
                 eyebrow: localizations.tr('cargoControlTitle'),
-                title: 'Run each shipment from one clean home base.',
+                title: 'Run each shipment from one clean base.',
                 subtitle:
-                    'Post loads fast, monitor what is moving, and keep driver discovery within reach without crowding the screen.',
+                    'Post loads fast, monitor what is moving, and keep driver discovery within reach.',
                 primaryLabel: localizations.tr('postALoad'),
                 primaryIcon: Icons.add_circle_outline,
                 onPrimaryTap: widget.onPostLoad,
@@ -167,14 +142,14 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                 secondaryIcon: Icons.inventory_2_outlined,
                 onSecondaryTap: () => widget.onSelectTab(3),
                 metrics: [
-                  _HeroMetricData(
-                    label: localizations.tr('recentLoads'),
-                    value: '4',
-                  ),
-                  _HeroMetricData(
-                    label: localizations.tr('suggestedDrivers'),
-                    value: '3',
-                  ),
+                  // _HeroMetricData(
+                  //   label: localizations.tr('recentLoads'),
+                  //   value: '4',
+                  // ),
+                  // _HeroMetricData(
+                  //   label: localizations.tr('suggestedDrivers'),
+                  //   value: '3',
+                  // ),
                   _HeroMetricData(
                     label: localizations.tr('profile'),
                     value: VerificationAccess.statusTitle(
@@ -187,7 +162,7 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
               _SectionHeader(
                 title: localizations.tr('quickActions'),
                 subtitle:
-                    'Start the next shipment step without digging through tabs.',
+                    'Start the next shipment steps.',
               ),
               const SizedBox(height: 12),
               Row(
@@ -198,6 +173,9 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                       title: localizations.tr('postALoad'),
                       subtitle:
                           'Create a new shipment and start collecting bids.',
+                      accent: const Color(0xFFB45309),
+                      iconBackground: const Color(0xFFFFEDD5),
+                      cardTint: const Color(0xFFFFF7ED),
                       onTap: widget.onPostLoad,
                     ),
                   ),
@@ -207,8 +185,53 @@ class _PreFeedCargoScreenState extends State<PreFeedCargoScreen> {
                       icon: Icons.person_outline,
                       title: localizations.tr('profile'),
                       subtitle:
-                          'Review your account, documents, and approval status.',
+                          'Review your account, and approval status.',
+                      accent: const Color(0xFF4F46E5),
+                      iconBackground: const Color(0xFFEEF2FF),
+                      cardTint: const Color(0xFFF8FAFF),
                       onTap: widget.onOpenProfile,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Wallet',
+                      subtitle:
+                          'Review available balance before accepting bids.',
+                      accent: const Color(0xFF15803D),
+                      iconBackground: const Color(0xFFDCFCE7),
+                      cardTint: const Color(0xFFF4FFF7),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const WalletScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _QuickActionCard(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'Notifications',
+                      subtitle:
+                          'Track bids, delivery milestones, and verification.',
+                      accent: const Color(0xFF0F766E),
+                      iconBackground: const Color(0xFFCCFBF1),
+                      cardTint: const Color(0xFFF0FDFA),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -547,12 +570,18 @@ class _QuickActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final Color accent;
+  final Color iconBackground;
+  final Color cardTint;
   final VoidCallback onTap;
 
   const _QuickActionCard({
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.accent,
+    required this.iconBackground,
+    required this.cardTint,
     required this.onTap,
   });
 
@@ -565,10 +594,12 @@ class _QuickActionCard extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isDark ? AppPalette.darkCard : AppPalette.card,
+          color: isDark ? AppPalette.darkCard : cardTint,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark ? AppPalette.darkOutline : const Color(0xFFE5E7EB),
+            color: isDark
+                ? AppPalette.darkOutline
+                : accent.withAlpha((0.20 * 255).round()),
           ),
           boxShadow: [
             BoxShadow(
@@ -587,10 +618,10 @@ class _QuickActionCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFEDD5),
+                color: iconBackground,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: const Color(0xFFB45309)),
+              child: Icon(icon, color: accent),
             ),
             const SizedBox(height: 14),
             Text(

@@ -51,6 +51,39 @@ class RecommendationService {
     return score;
   }
 
+  static double scoreReturnLoad({
+    required ThreadMessage thread,
+    required String returnOrigin,
+    required String originalStart,
+    required List<String> recentTokens,
+  }) {
+    double score = 0;
+
+    final startToken = _firstToken(thread.start).toLowerCase();
+    final endToken = _firstToken(thread.end).toLowerCase();
+    final originToken = _firstToken(returnOrigin).toLowerCase();
+    final originalStartToken = _firstToken(originalStart).toLowerCase();
+    final loweredRecent = recentTokens.map((e) => e.toLowerCase()).toSet();
+
+    if (startToken == originToken && originToken.isNotEmpty) {
+      score += 60;
+    }
+    if (endToken == originalStartToken && originalStartToken.isNotEmpty) {
+      score += 15;
+    }
+    if (loweredRecent.contains(endToken)) {
+      score += 18;
+    }
+    if (loweredRecent.contains(startToken)) {
+      score += 8;
+    }
+    if (thread.weight > 0 && thread.weight <= 12000) {
+      score += 6;
+    }
+
+    return score;
+  }
+
   static String _firstToken(String value) {
     final parts = value.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     return parts.isEmpty ? '' : parts.first;

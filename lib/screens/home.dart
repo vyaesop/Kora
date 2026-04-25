@@ -14,16 +14,18 @@ import 'package:kora/screens/pre_feed_cargo.dart';
 import 'package:kora/screens/pre_feed_driver.dart';
 import 'package:kora/utils/app_theme.dart';
 import 'package:kora/utils/backend_auth_service.dart';
+import 'package:kora/utils/notification_center_controller.dart';
 import 'package:kora/app_localizations.dart';
 import 'package:kora/utils/session_preferences.dart';
 import 'package:kora/utils/verification_access.dart';
+import 'package:kora/widgets/activity_action_buttons.dart';
 
 DriverLocationService? _locationService;
 
 Future<void> _checkAndStartLocationUpdates(UserModel user) async {
-  if (user.userType == 'Driver' && user.acceptedLoads!.isNotEmpty) {
+  if (user.userType == 'Driver') {
     _locationService ??= DriverLocationService(user.id);
-    _locationService!.start();
+    await _locationService!.start();
   } else {
     _locationService?.stop();
     _locationService = null;
@@ -43,6 +45,7 @@ class _HomeState extends State<Home> {
   // Remove PanelController since we're not using sliding panel anymore
   UserModel? currentUser;
   bool isLoading = true;
+  bool _driverLocationReady = true;
   DriverLocationService? _locationService; // Make it nullable
 
   int get _feedTabIndex => 1;
@@ -80,7 +83,18 @@ class _HomeState extends State<Home> {
         currentUser = sessionUser;
         selectedIndex = 0;
       });
+      if (sessionUser.userType == 'Driver') {
+        final locationReady =
+            await DriverLocationService.ensureCriticalLocationAccess(context);
+        if (!mounted) return;
+        setState(() {
+          _driverLocationReady = locationReady;
+        });
+      } else {
+        _driverLocationReady = true;
+      }
       await _checkAndStartLocationUpdates(currentUser!);
+      await NotificationCenterController.refreshUnreadCount(forceRefresh: true);
       await _showTour(currentUser!);
     } catch (e) {
       if (!mounted) return;
@@ -191,7 +205,11 @@ class _HomeState extends State<Home> {
           label: localizations.tr('myLoads'),
         ),
         BottomNavigationBarItem(
-          icon: const Icon(Icons.person),
+          icon: ValueListenableBuilder<int>(
+            valueListenable: NotificationCenterController.unreadCount,
+            builder: (context, unreadCount, _) =>
+                BadgeIcon(icon: Icons.person, count: unreadCount),
+          ),
           label: localizations.tr('profile'),
         ),
       ];
@@ -211,7 +229,11 @@ class _HomeState extends State<Home> {
           label: localizations.tr('myBids'),
         ),
         BottomNavigationBarItem(
-          icon: const Icon(Icons.person),
+          icon: ValueListenableBuilder<int>(
+            valueListenable: NotificationCenterController.unreadCount,
+            builder: (context, unreadCount, _) =>
+                BadgeIcon(icon: Icons.person, count: unreadCount),
+          ),
           label: localizations.tr('profile'),
         ),
       ];
@@ -230,7 +252,11 @@ class _HomeState extends State<Home> {
         label: localizations.tr('search'),
       ),
       BottomNavigationBarItem(
-        icon: const Icon(Icons.person),
+        icon: ValueListenableBuilder<int>(
+          valueListenable: NotificationCenterController.unreadCount,
+          builder: (context, unreadCount, _) =>
+              BadgeIcon(icon: Icons.person, count: unreadCount),
+        ),
         label: localizations.tr('profile'),
       ),
     ];
@@ -245,7 +271,32 @@ class _HomeState extends State<Home> {
     setState(() {
       currentUser = refreshed;
     });
+    if (refreshed.userType == 'Driver') {
+      final locationReady =
+          await DriverLocationService.ensureCriticalLocationAccess(context);
+      if (!mounted) return;
+      setState(() {
+        _driverLocationReady = locationReady;
+      });
+    }
     await _checkAndStartLocationUpdates(refreshed);
+  }
+
+  Future<void> _retryDriverLocationAccess() async {
+    final user = currentUser;
+    if (user == null || user.userType != 'Driver') {
+      return;
+    }
+    final ready = await DriverLocationService.ensureCriticalLocationAccess(
+      context,
+    );
+    if (!mounted) return;
+    setState(() {
+      _driverLocationReady = ready;
+    });
+    if (ready) {
+      await _checkAndStartLocationUpdates(user);
+    }
   }
 
   Future<void> _openVerificationFlow() async {
@@ -306,10 +357,14 @@ class _HomeState extends State<Home> {
     }
     final pages = _buildPages();
     final navItems = _buildNavItems(localizations);
+    final driverLocationBlocked =
+        currentUser?.userType == 'Driver' && !_driverLocationReady;
 
     return Scaffold(
       // ✅ Removed SlidingUpPanel, now just normal body
-      body: pages[selectedIndex],
+      body: driverLocationBlocked
+          ? _DriverLocationRequiredView(onRetry: _retryDriverLocationAccess)
+          : pages[selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedIndex,
         showSelectedLabels: true,
@@ -322,13 +377,91 @@ class _HomeState extends State<Home> {
             return;
           }
 
-          // Otherwise switch tabs
-          setState(() {
-            selectedIndex = index;
-          });
+          if (!driverLocationBlocked) {
+            setState(() {
+              selectedIndex = index;
+            });
+          }
         },
       ),
       // ✅ No more extendBody needed since panel is gone
+    );
+  }
+}
+
+class _DriverLocationRequiredView extends StatelessWidget {
+  final Future<void> Function() onRetry;
+
+  const _DriverLocationRequiredView({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            width: 560,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDark ? AppPalette.darkCard : Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark
+                    ? AppPalette.darkOutline
+                    : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(
+                    Icons.location_searching_rounded,
+                    size: 36,
+                    color: Color(0xFF1D4ED8),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Location access is required for drivers',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Kora uses your live location for nearby load discovery, return-load suggestions, and shipment tracking. Please enable precise location to continue.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: isDark
+                        ? AppPalette.darkTextSoft
+                        : const Color(0xFF475569),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.my_location_rounded),
+                    label: const Text('Enable location'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

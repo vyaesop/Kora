@@ -59,5 +59,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Kora uses your location to show nearby loads, return-load suggestions, and live shipment tracking for active deliveries.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Kora uses your location to keep driver route discovery and shipment tracking accurate throughout the trip.</string>
 </dict>
 </plist>
