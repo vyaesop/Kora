@@ -20,6 +20,8 @@ admin-console/dist/
 /android/Oracle_JDK-21/
 /android/.gradle/
 /android/app/.gradle/
+.gradle-local/
+.gradle-local-run/
 
 # iOS
 /ios/Flutter/.last_build_id
