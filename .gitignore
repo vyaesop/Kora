@@ -34,3 +34,4 @@ admin-console/dist/
 .DS_Store
 .idea/
 .metadata
+.gradle-local-run/
