@@ -18,6 +18,11 @@ const targetAdminInput = document.getElementById('targetAdmin');
 const targetSuperAdminInput = document.getElementById('targetSuperAdmin');
 const setClaimBtn = document.getElementById('setClaimBtn');
 
+const fundTargetUidInput = document.getElementById('fundTargetUid');
+const fundAmountInput = document.getElementById('fundAmount');
+const fundNoteInput = document.getElementById('fundNote');
+const topUpUserBtn = document.getElementById('topUpUserBtn');
+
 const authBadge = document.getElementById('authBadge');
 const apiBadge = document.getElementById('apiBadge');
 const pageTitle = document.getElementById('pageTitle');
@@ -153,6 +158,7 @@ function setAuthState(token, user) {
       ? 'Super admin'
       : 'Admin'
     : 'Signed out';
+  topUpUserBtn.disabled = !authUser?.isSuperAdmin;
 }
 
 function setAuthMessage(message) {
@@ -729,6 +735,38 @@ async function setUserClaim(userId, admin, superAdmin) {
   });
 }
 
+async function topUpUserWallet() {
+  const userId = String(fundTargetUidInput.value || '').trim();
+  const amount = Number(fundAmountInput.value || 0);
+  const note = String(fundNoteInput.value || '').trim();
+
+  if (!userId) {
+    log('Cannot add funds: target user UID is required.');
+    return;
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    log('Cannot add funds: amount must be greater than zero.');
+    return;
+  }
+
+  try {
+    await callAdmin(`/api/admin/users/${encodeURIComponent(userId)}/wallet/topups`, {
+      method: 'POST',
+      body: {
+        amount,
+        note: note || undefined,
+      },
+    });
+    log(`Added ${formatPrice(amount)} ETB to user ${userId}'s wallet.`);
+    fundAmountInput.value = '';
+    fundNoteInput.value = '';
+  } catch (error) {
+    log(`Wallet top-up failed for ${userId}: ${error.message}`);
+    throw error;
+  }
+}
+
 async function bootstrapAdminData() {
   if (!authToken) {
     return;
@@ -848,6 +886,13 @@ refreshUsersBtn.addEventListener('click', loadPendingUsers);
 refreshDisputesBtn.addEventListener('click', loadDisputes);
 refreshLoadsBtn.addEventListener('click', loadLoads);
 refreshUsersManageBtn.addEventListener('click', loadUsersManage);
+topUpUserBtn.addEventListener('click', async () => {
+  try {
+    await topUpUserWallet();
+  } catch (error) {
+    // error already logged by topUpUserWallet
+  }
+});
 
 loadsSearch.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {

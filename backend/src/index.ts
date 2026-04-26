@@ -3841,6 +3841,55 @@ app.patch('/api/admin/admins/:targetUid/claim', requireAuth, requireSuperAdmin, 
   }
 });
 
+app.post('/api/admin/users/:userId/wallet/topups', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const userId = asSingleParam(req.params.userId);
+    const amount = Number(req.body?.amount ?? 0);
+    const note = req.body?.note == null ? null : String(req.body.note).trim();
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ ok: false, error: 'amount must be greater than zero' });
+      return;
+    }
+
+    const wallet = await ensureWallet(userId);
+    const updatedWallet = await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: { balance: { increment: amount } },
+    });
+
+    await createWalletTransaction({
+      walletId: wallet.id,
+      userId,
+      kind: 'manual_credit',
+      direction: 'credit',
+      status: 'completed',
+      amount,
+      title: 'Manual wallet top-up',
+      description: note || 'Funds added by super admin.',
+    });
+
+    await createNotification({
+      userId,
+      type: 'wallet_manual_topup',
+      title: 'Wallet funds added',
+      body: `${formatWalletAmount(amount)} was added to your wallet by a super admin.`, 
+      route: '/wallet',
+    });
+
+    res.json({
+      ok: true,
+      wallet: {
+        ...updatedWallet,
+        availableBalance: updatedWallet.balance - updatedWallet.reservedBalance,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to add wallet funds';
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
 app.post('/api/telegram/webhook', async (req: Request, res: Response) => {
   try {
     const provided =
