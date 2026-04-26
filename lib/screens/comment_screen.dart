@@ -124,9 +124,10 @@ class _CommentScreenState extends State<CommentScreen> {
       );
       final ownerId = (thread?['ownerId'] ?? '').toString();
       final isShipper = _currentUserId != null && _currentUserId == ownerId;
-      final suggestionOriginData = isShipper
-          ? _SuggestionOrigin(city: currentEnd, isLiveDriverCity: false)
-          : await _resolveSuggestionOrigin(fallbackCity: currentEnd);
+      final suggestionOriginData = _SuggestionOrigin(
+        city: currentEnd,
+        isLiveDriverCity: false,
+      );
       final suggestionsRows = await _loadClientSideSuggestions(
         returnOrigin: suggestionOriginData.city,
         excludeThreadId: widget.threadId,
