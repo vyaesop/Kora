@@ -18,7 +18,7 @@ const targetAdminInput = document.getElementById('targetAdmin');
 const targetSuperAdminInput = document.getElementById('targetSuperAdmin');
 const setClaimBtn = document.getElementById('setClaimBtn');
 
-const fundTargetUidInput = document.getElementById('fundTargetUid');
+const fundTargetPhoneInput = document.getElementById('fundTargetPhone');
 const fundAmountInput = document.getElementById('fundAmount');
 const fundNoteInput = document.getElementById('fundNote');
 const topUpUserBtn = document.getElementById('topUpUserBtn');
@@ -736,12 +736,12 @@ async function setUserClaim(userId, admin, superAdmin) {
 }
 
 async function topUpUserWallet() {
-  const userId = String(fundTargetUidInput.value || '').trim();
+  const targetPhoneNumber = String(fundTargetPhoneInput.value || '').trim();
   const amount = Number(fundAmountInput.value || 0);
   const note = String(fundNoteInput.value || '').trim();
 
-  if (!userId) {
-    log('Cannot add funds: target user UID is required.');
+  if (!targetPhoneNumber) {
+    log('Cannot add funds: target phone number is required.');
     return;
   }
 
@@ -751,18 +751,18 @@ async function topUpUserWallet() {
   }
 
   try {
-    await callAdmin(`/api/admin/users/${encodeURIComponent(userId)}/wallet/topups`, {
+    await callAdmin(`/api/admin/users/${encodeURIComponent(targetPhoneNumber)}/wallet/topups`, {
       method: 'POST',
       body: {
         amount,
         note: note || undefined,
       },
     });
-    log(`Added ${formatPrice(amount)} ETB to user ${userId}'s wallet.`);
+    log(`Added ${formatPrice(amount)} ETB to user ${targetPhoneNumber}'s wallet.`);
     fundAmountInput.value = '';
     fundNoteInput.value = '';
   } catch (error) {
-    log(`Wallet top-up failed for ${userId}: ${error.message}`);
+    log(`Wallet top-up failed for ${targetPhoneNumber}: ${error.message}`);
     throw error;
   }
 }

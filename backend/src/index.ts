@@ -3843,7 +3843,7 @@ app.patch('/api/admin/admins/:targetUid/claim', requireAuth, requireSuperAdmin, 
 
 app.post('/api/admin/users/:userId/wallet/topups', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
-    const userId = asSingleParam(req.params.userId);
+    const rawIdentifier = asSingleParam(req.params.userId);
     const amount = Number(req.body?.amount ?? 0);
     const note = req.body?.note == null ? null : String(req.body.note).trim();
 
@@ -3852,7 +3852,28 @@ app.post('/api/admin/users/:userId/wallet/topups', requireAuth, requireSuperAdmi
       return;
     }
 
-    const wallet = await ensureWallet(userId);
+    let user = await prisma.user.findUnique({ where: { id: rawIdentifier } });
+    if (!user) {
+      const normalizedPhone = normalizePhoneNumber(rawIdentifier);
+      if (normalizedPhone) {
+        const digitsOnly = normalizedPhone.startsWith('+') ? normalizedPhone.slice(1) : normalizedPhone;
+        user = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { phoneNumber: normalizedPhone },
+              { phoneNumber: digitsOnly },
+            ],
+          },
+        });
+      }
+    }
+
+    if (!user) {
+      res.status(404).json({ ok: false, error: 'User not found by UID or phone number' });
+      return;
+    }
+
+    const wallet = await ensureWallet(user.id);
     const updatedWallet = await prisma.wallet.update({
       where: { id: wallet.id },
       data: { balance: { increment: amount } },
@@ -3860,7 +3881,7 @@ app.post('/api/admin/users/:userId/wallet/topups', requireAuth, requireSuperAdmi
 
     await createWalletTransaction({
       walletId: wallet.id,
-      userId,
+      userId: user.id,
       kind: 'manual_credit',
       direction: 'credit',
       status: 'completed',
@@ -3870,7 +3891,7 @@ app.post('/api/admin/users/:userId/wallet/topups', requireAuth, requireSuperAdmi
     });
 
     await createNotification({
-      userId,
+      userId: user.id,
       type: 'wallet_manual_topup',
       title: 'Wallet funds added',
       body: `${formatWalletAmount(amount)} was added to your wallet by a super admin.`, 
