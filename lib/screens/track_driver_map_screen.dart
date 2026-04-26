@@ -43,6 +43,8 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
   String? _error;
   Timer? _pollTimer;
   LatLng? _lastMapCenter;
+  LatLng? _pendingMapCenter;
+  bool _mapReady = false;
   String? _lastStatus;
 
   @override
@@ -151,21 +153,25 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
 
   void _maybeRecenterMap(LatLng? nextLocation) {
     if (nextLocation == null) return;
-    if (_lastMapCenter == null) {
-      _lastMapCenter = nextLocation;
-      _mapController.move(nextLocation, _mapZoom);
+
+    final shouldMove = _lastMapCenter == null ||
+        _distance.as(
+          LengthUnit.Meter,
+          _lastMapCenter!,
+          nextLocation,
+        ) >=
+            _mapRecenterMeters;
+    if (!shouldMove) {
       return;
     }
 
-    final movedMeters = _distance.as(
-      LengthUnit.Meter,
-      _lastMapCenter!,
-      nextLocation,
-    );
-    if (movedMeters >= _mapRecenterMeters) {
-      _lastMapCenter = nextLocation;
-      _mapController.move(nextLocation, _mapZoom);
+    _lastMapCenter = nextLocation;
+    if (!_mapReady) {
+      _pendingMapCenter = nextLocation;
+      return;
     }
+
+    _mapController.move(nextLocation, _mapZoom);
   }
 
   bool _isStale(DateTime? updatedAt) {
@@ -368,6 +374,15 @@ class _TrackDriverMapScreenState extends State<TrackDriverMapScreen> {
                         options: MapOptions(
                           initialCenter: _lastMapCenter ?? driverLocation,
                           initialZoom: _mapZoom,
+                          onMapReady: () {
+                            if (!mounted) return;
+                            _mapReady = true;
+                            if (_pendingMapCenter != null) {
+                              final pendingCenter = _pendingMapCenter!;
+                              _pendingMapCenter = null;
+                              _mapController.move(pendingCenter, _mapZoom);
+                            }
+                          },
                         ),
                         children: [
                           TileLayer(
